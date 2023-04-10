@@ -13,6 +13,17 @@ pub struct PeerId {
 }
 
 impl PeerId {
+    pub fn to_string(&self) -> String {
+        let uuid_str = self.uuid.to_string();
+
+        let parts = [
+            self.hostname.as_str(),
+            uuid_str.as_str()
+        ];
+
+        parts.join(INSTANCE_SEPARATOR)
+    }
+
     pub fn parse(instance: &str) -> Option<Self> {
         let (hostname, uuid_str) = instance.split_once(INSTANCE_SEPARATOR)?;
         let uuid = Uuid::parse_str(uuid_str).ok()?;

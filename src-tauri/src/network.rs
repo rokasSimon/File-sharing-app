@@ -1,26 +1,27 @@
 mod mdns;
 mod peer_id;
 
-use std::net::SocketAddr;
+use std::collections::HashMap;
+use std::net::{SocketAddr, Ipv4Addr, IpAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
-use mdns_sd::ServiceDaemon;
-use tokio::net::{TcpStream};
-use tokio::{net::TcpListener, sync::mpsc};
+use mdns_sd::{ServiceDaemon, ServiceInfo};
+use tokio::net::{TcpStream, TcpListener};
+use tokio::{sync::mpsc};
 use tauri::{AppHandle, Manager, async_runtime::Mutex};
+
+use anyhow::{Result, Ok};
 
 use crate::data::{ShareDirectory};
 use crate::config::{AppConfig, StoredConfig};
 
+use self::mdns::{MdnsDaemon, SERVICE_TYPE};
 use self::peer_id::{PeerId};
-
-const SERVICE_TYPE: &str = "_ktu_fileshare._tcp.local.";
 
 pub async fn main_network_handler(
     app_handle: AppHandle,
     stored_data: Arc<StoredConfig>,
-    connections: Arc<Mutex<Vec<ConnectedPeer>>>,
     client_receiver: mpsc::Receiver<String>
 ) {
     
@@ -40,11 +41,12 @@ pub async fn route_input_to_network_thread(
 }
 
 pub async fn accept_tcp_connections(
-    connections: Arc<Mutex<Vec<ConnectedPeer>>>
+    network_manager: Arc<NetworkManager>
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let tcp_listener = TcpListener::bind("127.0.0.1:0").await.expect("should be able to bind TCP listener to address");
+    let tcp_listener = &network_manager.tcp_listener;
+    let connections = &network_manager.peers;
 
-    while let Ok((tcp_stream, socket_addr)) = tcp_listener.accept().await {
+    while let Ok((tcp_stream, socket_addr)) = tcp_listener.lock().await.accept().await {
         let mut connection_lock = connections.lock().await;
 
         // connection_lock.retain(async |connection| {
@@ -127,4 +129,67 @@ pub async fn to_network_thread(
         .send(message)
         .await
         .map_err(|e| e.to_string())
+}
+
+pub struct NetworkManager {
+    tcp_listener: Mutex<TcpListener>,
+    peers: Mutex<Vec<ConnectedPeer>>,
+    mdns: Mutex<MdnsDaemon>
+}
+
+impl NetworkManager {
+    pub async fn new(peer_id: Option<PeerId>) -> Self {
+        let ip4 = Ipv4Addr::new(127, 0, 0, 1);
+        let address = SocketAddr::new(std::net::IpAddr::V4(ip4), 0);
+        let tcp_listener = TcpListener::bind(address).await.expect("should be able to bind to localhost");
+
+        let local_addr = tcp_listener.local_addr().expect("should be able to access bound address");
+        let ip = local_addr.ip();
+        let host_name = ip.to_string() + ".local.";
+        
+        let ip = match ip {
+            IpAddr::V4(ipv4) => ipv4,
+            IpAddr::V6(ipv6) => panic!("IPv6 not supported")
+        };
+
+        let properties = HashMap::from([
+            ("port".to_owned(), local_addr.port().to_string())
+        ]);
+
+        let peer_id = match peer_id {
+            Some(peer) => peer,
+            None => PeerId::generate()
+        };
+
+        let mdns = ServiceDaemon::new().expect("should be able to create mDNS daemon");
+        let service = ServiceInfo::new(
+            SERVICE_TYPE,
+            &peer_id.to_string(),
+            &host_name,
+            ip,
+            local_addr.port(), 
+            Some(properties))
+        .expect("should be able to create service info");
+
+        let mdns_daemon = MdnsDaemon::new(mdns, service, Mutex::new(vec![]));
+        let peers = vec![];
+
+        Self {
+            tcp_listener: Mutex::new(tcp_listener),
+            peers: Mutex::new(peers),
+            mdns: Mutex::new(mdns_daemon)
+        }
+    }
+
+    pub async fn start_mdns(&mut self) -> Result<()> {
+        let mut mdns = self.mdns.lock().await;
+
+        let result = mdns.start_query()?;
+
+        Ok(())
+    }
+
+    pub async fn loop_mdns(&mut self) {
+        while let Ok(mdns) = self.mdns.lock().await.
+    }
 }
