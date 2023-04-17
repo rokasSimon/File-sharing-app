@@ -9,7 +9,7 @@ use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
 use tauri::async_runtime::Mutex;
 
-use crate::data::{ShareDirectory};
+use crate::{data::{ShareDirectory}, peer_id::PeerId};
 
 pub fn load_stored_data() -> StoredConfig {
     let app_dir =
@@ -30,7 +30,11 @@ pub fn load_stored_data() -> StoredConfig {
     }
 
     let config_str = fs::read_to_string(&config_path).expect("to be able to read the config file");
-    let config: AppConfig = serde_json::from_str(&config_str).unwrap_or_default();
+    let mut config: AppConfig = serde_json::from_str(&config_str).unwrap_or_default();
+
+    if config.peer_id.is_none() {
+        config.peer_id = Some(PeerId::generate());
+    }
 
     let cache_str = fs::read_to_string(&cache_path).expect("to be able to read cache file");
     let cache: Vec<ShareDirectory> = serde_json::from_str(&cache_str).unwrap_or_default();
@@ -40,12 +44,14 @@ pub fn load_stored_data() -> StoredConfig {
 
 #[derive(Serialize, Deserialize)]
 pub struct AppConfig {
-
+    pub peer_id: Option<PeerId>
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self {  }
+        Self { 
+            peer_id: None
+        }
     }
 }
 

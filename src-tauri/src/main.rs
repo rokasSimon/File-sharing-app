@@ -10,26 +10,38 @@ extern crate log;
 mod data;
 mod network;
 mod config;
+mod peer_id;
 
-use std::sync::{Arc};
+use std::{sync::{Arc}, net::{SocketAddr, Ipv4Addr, SocketAddrV4}};
 
 use tauri::{Manager, async_runtime::Mutex};
-use tokio::{sync::mpsc, net::TcpListener};
+use tokio::{sync::{mpsc, oneshot, broadcast}, net::TcpListener};
 use window_shadows::set_shadow;
 
 use config::load_stored_data;
-use network::{main_network_handler, to_network_thread, NetworkThreadSender, route_input_to_network_thread, accept_tcp_connections, NetworkManager};
+use network::{main_network_handler, to_network_thread, NetworkThreadSender, route_input_to_network_thread, server_handle::{ServerHandle, MessageToServer, server_loop}, tcp_listener::start_accept, mdns::start_mdns};
 
-const NETWORK_THREAD_RECEIVER_SIZE: usize = 1;
+const NETWORK_THREAD_RECEIVER_SIZE: usize = 64;
 
 fn main() {
     pretty_env_logger::init();
 
     let config = load_stored_data();
+    let id = config.app_config.blocking_lock().peer_id.clone().expect("PeerID should be set on startup");
     let stored_data = Arc::new(config);
 
     let (webview_to_intermediary_sender, intermediary_receiver) = mpsc::channel::<String>(NETWORK_THREAD_RECEIVER_SIZE);
     let (intermediary_to_network_sender, network_receiver) = mpsc::channel::<String>(NETWORK_THREAD_RECEIVER_SIZE);
+
+    let (tcp_addr_sender, tcp_addr_receiver) = oneshot::channel::<SocketAddr>();
+    let soc_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0));
+
+    let (server_sender, server_receiver) = mpsc::channel::<MessageToServer>(NETWORK_THREAD_RECEIVER_SIZE);
+    let server_handle = ServerHandle {
+        channel: server_sender,
+        config: stored_data,
+        peer_id: id,
+    };
 
     tauri::Builder::default()
         .manage(NetworkThreadSender::new(webview_to_intermediary_sender))
@@ -40,24 +52,23 @@ fn main() {
             if let Err(e) = set_shadow(&window, true) {
                 warn!("Could not set shadows: {}", e)
             }
-
-            // let tcp_listener = tauri::async_runtime::block_on(TcpListener::bind("127.0.0.1:0"))
-            //     .expect("should be able to bind TCP listener to address");
-
-            let network_manager = tauri::async_runtime::block_on(NetworkManager::new(None));
-            let network_manager = Arc::new(network_manager);
             
+            //let (broadcast_sender, broadcast_receiver) = broadcast::channel(64);
+            
+            tauri::async_runtime::spawn(start_accept(soc_addr, tcp_addr_sender, server_handle.clone()));
+            tauri::async_runtime::spawn(start_mdns(tcp_addr_receiver, server_handle.clone(), None));
+            tauri::async_runtime::spawn(server_loop(server_receiver, server_handle.clone()));
             tauri::async_runtime::spawn(route_input_to_network_thread(intermediary_receiver, intermediary_to_network_sender));
-            tauri::async_runtime::spawn(accept_tcp_connections(network_manager.clone()));
 
             let app_handle = app.handle();
-            tauri::async_runtime::spawn(
-                main_network_handler(
-                    app_handle,
-                    stored_data,
-                    network_receiver
-                )
-            );
+            // tauri::async_runtime::spawn(
+            //     main_network_handler(
+            //         app_handle,
+            //         stored_data,
+            //         network_manager.clone(),
+            //         network_receiver
+            //     )
+            // );
 
             Ok(())
         })

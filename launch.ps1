@@ -1,2 +1,2 @@
-$Env:RUST_LOG="debug";
+$Env:RUST_LOG="warn";
 npx tauri dev

@@ -1,12 +1,11 @@
-use std::{net::SocketAddr};
+use std::fmt::Display;
 
 use serde::{Serialize, Deserialize};
-use tokio::net::TcpStream;
 use uuid::Uuid;
 
 const INSTANCE_SEPARATOR: &str = ";";
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct PeerId {
     hostname: String,
     uuid: Uuid
@@ -47,5 +46,11 @@ impl PeerId {
             hostname,
             uuid
         }
+    }
+}
+
+impl Display for PeerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }

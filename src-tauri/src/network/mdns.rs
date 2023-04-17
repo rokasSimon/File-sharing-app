@@ -1,61 +1,85 @@
-use std::sync::atomic::AtomicBool;
+use std::{
+    net::{IpAddr, SocketAddr, SocketAddrV4}, time::Duration,
+};
 
-use mdns_sd::{ServiceDaemon, ServiceInfo, Error, ServiceEvent, Receiver};
-use tauri::async_runtime::Mutex;
+use anyhow::Result;
+use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+use tokio::{sync::{oneshot, mpsc}, net::TcpStream};
+
+use crate::peer_id::PeerId;
+
+use super::{server_handle::{MessageToServer, ServerHandle}};
 
 pub const SERVICE_TYPE: &str = "_ktu_fileshare._tcp.local.";
+pub const MDNS_UPDATE_TIME: u64 = 5;
 
-pub struct MdnsDaemon {
-    mdns: ServiceDaemon,
-    registered_service: ServiceInfo,
-    service_receiver: Option<Receiver<ServiceEvent>>,
-    received_services: Mutex<Vec<ServiceInfo>>,
-    is_browsing: bool
+pub struct MdnsHandle {
+    pub info: ServiceInfo,
 }
 
-impl MdnsDaemon {
-    pub fn new(mdns: ServiceDaemon, registered_service: ServiceInfo, service_collection: Mutex<Vec<ServiceInfo>>) -> Self {
-        Self {
-            mdns, registered_service, service_receiver: None, received_services: service_collection, is_browsing: false
-        }
-    }
+pub async fn start_mdns(
+    addr_recv: oneshot::Receiver<SocketAddr>,
+    server_handle: ServerHandle,
+    peer_id: Option<PeerId>
+) -> Result<()> {
+    let local_addr = addr_recv.await?;
+    let ip = local_addr.ip();
+    let host_name = ip.to_string() + ".local.";
 
-    pub fn notify(&self) -> Result<(), Error> {
-        self.mdns.register(self.registered_service.clone())
-    }
+    let ip = match ip {
+        IpAddr::V4(ipv4) => ipv4,
+        IpAddr::V6(_) => panic!("IPv6 not supported"),
+    };
 
-    pub fn start_query(&mut self) -> Result<(), Error> {
-        let receiver = self.mdns.browse(SERVICE_TYPE)?;
+    let peer_id = match peer_id {
+        Some(peer) => peer,
+        None => PeerId::generate(),
+    };
 
-        self.service_receiver = Some(receiver);
-        self.is_browsing = true;
+    let mdns = ServiceDaemon::new().expect("should be able to create mDNS daemon");
+    let service_info = ServiceInfo::new(
+        SERVICE_TYPE,
+        &peer_id.to_string(),
+        &host_name,
+        ip,
+        local_addr.port(),
+        None,
+    )
+    .expect("should be able to create service info");
 
-        Ok(())
-    }
+    let service_receiver = mdns.browse(SERVICE_TYPE).expect("should start mDNS browse");
+    let mut interval = tokio::time::interval(Duration::from_secs(MDNS_UPDATE_TIME));
 
-    pub async fn loop_add_services(&self) {
-        if let Some(receiver) = &self.service_receiver {
-            while self.is_browsing {
-                if let Ok(event) = receiver.recv_async().await {
+    loop {
+        tokio::select! {
+            event = service_receiver.recv_async() => {
+                match event {
+                    Ok(ev) => handle_mdns_event(&ev, &server_handle).await,
+                    Err(err) => error!("Event received was error: {}", err)
+                }
+            }
+            _ = interval.tick() => {
+                let res = mdns.register(service_info.clone());
 
-                    match event {
-                        ServiceEvent::ServiceResolved(service) => {
-                            let mut services = self.received_services.lock().await;
-
-                            services.push(service);
-                        },
-                        ServiceEvent::ServiceRemoved(service_type, fullname) => {
-                            let mut services = self.received_services.lock().await;
-
-                            services.retain(|serv| {
-                                serv.get_fullname() != fullname
-                            });
-                        }
-                        _ => ()
-                    }
-
+                match res {
+                    Ok(()) => (),
+                    Err(e) => error!("{}", e)
                 }
             }
         }
+    }
+}
+
+async fn handle_mdns_event(event: &ServiceEvent, server_handle: &ServerHandle) {
+    match event {
+        ServiceEvent::ServiceResolved(service) => {
+            warn!("Resolved service {:?}", service);
+
+            let _ = server_handle.channel.send(MessageToServer::ServiceFound(service.clone())).await;
+        }
+        ServiceEvent::ServiceRemoved(service_type, fullname) => {
+            warn!("Removed service {} {}", service_type, fullname);
+        }
+        _ => ()
     }
 }
