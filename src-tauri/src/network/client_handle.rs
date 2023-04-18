@@ -43,6 +43,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                     match result {
                         Ok(message) => {
                             match message {
+
                                 TcpMessage::RequestPeerId => {
                                     let res = framed_writer.send(TcpMessage::SendPeerId(client_data.server.peer_id.clone())).await;
 
@@ -50,12 +51,14 @@ pub async fn client_loop(mut client_data: ClientData) {
                                         error!("{}", e);
                                     }
                                 },
+
                                 TcpMessage::SendPeerId(id) => {
                                     warn!("Received {} peer id", &id);
 
                                     client_peer_id = Some(id);
                                     let _ = client_data.server.channel.send(MessageToServer::SetPeerId(addr, client_peer_id.unwrap())).await;
                                 }
+
                                 _ => { }
                             }
                         }
@@ -68,6 +71,7 @@ pub async fn client_loop(mut client_data: ClientData) {
             server_message = client_data.passive_receiver.recv() => {
                 if let Some(message_from_server) = server_message {
                     match message_from_server {
+
                         MessageFromServer::GetPeerId => {
                             let result = framed_writer.send(TcpMessage::RequestPeerId).await;
 
@@ -75,6 +79,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                                 error!("{}", e);
                             }
                         },
+                        
                         _ => ()
                     }
                 }

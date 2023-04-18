@@ -37,12 +37,26 @@ pub async fn server_loop(
 
     while let Some(msg) = recv.recv().await {
         match msg {
+
             MessageToServer::ServiceFound(service) => {
                 let ip_addr = service.get_addresses().iter().next();
 
                 match ip_addr {
                     Some(ip) => {
-                        let socket_addr = SocketAddrV4::new(*ip, service.get_port());
+                        let properties = service.get_properties();
+                        let port = properties.get("port");
+
+                        let port = match port {
+                            Some(p) => p,
+                            None => continue
+                        };
+
+                        let port: u16 = match port.parse() {
+                            Ok(p) => p,
+                            Err(_) => continue
+                        };
+
+                        let socket_addr = SocketAddrV4::new(*ip, port);
                         let socket_addr = SocketAddr::V4(socket_addr);
 
                         if !clients.contains_key(&socket_addr) {
@@ -60,7 +74,8 @@ pub async fn server_loop(
                     },
                     None => error!("Service had no associated IP addresses")
                 }
-            },
+            }
+
             MessageToServer::ConnectionAccepted(tcp, addr) => {
                 if !clients.contains_key(&addr) {
                     add_client(&mut clients, tcp, addr, &server_handle).await;
@@ -68,6 +83,7 @@ pub async fn server_loop(
                     warn!("Client already connected: {}", addr);
                 }
             }
+
             MessageToServer::SetPeerId(addr, id) => {
                 let client = clients.get_mut(&addr);
 
@@ -80,6 +96,7 @@ pub async fn server_loop(
                     }
                 }
             }
+
             _ => {
                 info!("Something was sent to server handle");
             }

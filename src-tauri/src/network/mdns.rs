@@ -1,5 +1,5 @@
 use std::{
-    net::{IpAddr, SocketAddr, SocketAddrV4, Ipv4Addr}, time::Duration,
+    net::{IpAddr, SocketAddr, SocketAddrV4, Ipv4Addr}, time::Duration, collections::HashMap,
 };
 
 use anyhow::Result;
@@ -40,14 +40,18 @@ pub async fn start_mdns(
 
     let addr = [intf_addr];
 
+    let properties = HashMap::from([
+        ("port".to_owned(), local_addr.port().to_string())
+    ]);
+
     let mdns = ServiceDaemon::new().expect("should be able to create mDNS daemon");
     let service_info = ServiceInfo::new(
         SERVICE_TYPE,
         &my_name,
         &host_name,
         &addr[..],
-        local_addr.port(),
-        None,
+        MDNS_PORT,
+        Some(properties),
     )
     .expect("should be able to create service info");
 
