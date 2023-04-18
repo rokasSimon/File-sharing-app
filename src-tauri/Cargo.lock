@@ -67,6 +67,7 @@ dependencies = [
  "chrono",
  "futures",
  "hostname",
+ "if-addrs 0.10.1",
  "log",
  "mdns-sd",
  "platform-dirs",
@@ -1414,6 +1415,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "if-addrs"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2cfc4a06638d2fd0dda83b01126fefd38ef9f04f54d2fc717a938df68b83a68d"
+dependencies = [
+ "libc",
+ "windows-sys 0.45.0",
+]
+
+[[package]]
 name = "ignore"
 version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1696,7 +1707,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "709cba29c9d7334db28706bc2767db2531934fd2e55781cba82c930fb7f22b47"
 dependencies = [
  "flume",
- "if-addrs",
+ "if-addrs 0.7.0",
  "log",
  "polling",
  "socket2",

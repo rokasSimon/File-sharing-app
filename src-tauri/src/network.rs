@@ -8,6 +8,7 @@ use std::net::{SocketAddr, Ipv4Addr, IpAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
+use if_addrs::IfAddr;
 use mdns_sd::{ServiceDaemon, ServiceInfo};
 use tokio::net::{TcpStream, TcpListener};
 use tokio::{sync::mpsc};
@@ -75,4 +76,26 @@ pub async fn to_network_thread(
         .send(message)
         .await
         .map_err(|e| e.to_string())
+}
+
+pub fn get_ipv4_intf() -> Ipv4Addr {
+    let intf_addr: Vec<Ipv4Addr> = if_addrs::get_if_addrs()
+        .expect("should be able to get IP interfaces")
+        .into_iter()
+        .filter_map(|intf| {
+            if intf.is_loopback() {
+                None
+            } else {
+                match intf.addr {
+                    IfAddr::V4(ifv4) => Some(ifv4),
+                    _ => None,
+                }
+            }
+        })
+        .map(|intf| intf.ip)
+        .collect();
+
+    let intf = intf_addr.iter().next().expect("should have at least 1 ipv4 interface");
+
+    *intf
 }
