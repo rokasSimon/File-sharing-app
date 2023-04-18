@@ -29,7 +29,7 @@ pub async fn start_mdns(
     let local_addr = addr_recv.await?;
     let ip = local_addr.ip();
 
-    let ip = match ip {
+    let _ = match ip {
         IpAddr::V4(ipv4) => ipv4,
         IpAddr::V6(_) => panic!("IPv6 not supported"),
     };
@@ -46,7 +46,7 @@ pub async fn start_mdns(
         &my_name,
         &host_name,
         &addr[..],
-        MDNS_PORT,
+        local_addr.port(),
         None,
     )
     .expect("should be able to create service info");
