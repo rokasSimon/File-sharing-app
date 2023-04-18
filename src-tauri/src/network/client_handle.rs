@@ -66,7 +66,18 @@ pub async fn client_loop(mut client_data: ClientData) {
                 }
             }
             server_message = client_data.passive_receiver.recv() => {
+                if let Some(message_from_server) = server_message {
+                    match message_from_server {
+                        MessageFromServer::GetPeerId => {
+                            let result = framed_writer.send(TcpMessage::RequestPeerId).await;
 
+                            if let Err(e) = result {
+                                error!("{}", e);
+                            }
+                        },
+                        _ => ()
+                    }
+                }
             }
         }
     }

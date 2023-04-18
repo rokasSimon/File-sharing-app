@@ -54,6 +54,8 @@ pub async fn server_loop(
                                 },
                                 Err(e) => error!("{}", e)
                             }
+                        } else {
+                            warn!("Client already connected: {}", socket_addr);
                         }
                     },
                     None => error!("Service had no associated IP addresses")
@@ -62,6 +64,8 @@ pub async fn server_loop(
             MessageToServer::ConnectionAccepted(tcp, addr) => {
                 if !clients.contains_key(&addr) {
                     add_client(&mut clients, tcp, addr, &server_handle).await;
+                } else {
+                    warn!("Client already connected: {}", addr);
                 }
             }
             MessageToServer::SetPeerId(addr, id) => {
