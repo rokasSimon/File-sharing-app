@@ -7,7 +7,7 @@ use tokio_util::codec::{FramedRead, FramedWrite};
 
 use crate::{peer_id::PeerId, network::server_handle::MessageToServer};
 
-use super::{server_handle::ServerHandle, codec::{MessageCodec, TcpMessage}};
+use super::{server_handle::{ServerHandle, ClientConnectionId}, codec::{MessageCodec, TcpMessage}};
 
 pub enum MessageFromServer {
     GetPeerId
@@ -17,7 +17,8 @@ pub struct ClientData {
     pub server: ServerHandle,
     pub stream: TcpStream,
     pub passive_receiver: mpsc::Receiver<MessageFromServer>,
-    pub active_receiver: mpsc::Receiver<MessageFromServer>
+    pub active_receiver: mpsc::Receiver<MessageFromServer>,
+    pub addr: ClientConnectionId
 }
 
 pub struct ClientHandle {
@@ -28,8 +29,6 @@ pub struct ClientHandle {
 }
 
 pub async fn client_loop(mut client_data: ClientData) {
-    let addr = client_data.stream.local_addr().expect("should be able to get socket address");
-    let ip = addr.ip();
     let (read, write) = client_data.stream.split();
 
     let mut framed_reader = FramedRead::new(read, MessageCodec {});
@@ -57,7 +56,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                                     warn!("Received {} peer id", &id);
 
                                     client_peer_id = Some(id);
-                                    let _ = client_data.server.channel.send(MessageToServer::SetPeerId(ip, client_peer_id.unwrap())).await;
+                                    let _ = client_data.server.channel.send(MessageToServer::SetPeerId(client_data.addr, client_peer_id.unwrap())).await;
                                 }
 
                                 _ => { }
@@ -66,7 +65,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                         Err(e) => error!("{}", e)
                     }
                 } else {
-                    let _ = client_data.server.channel.send(MessageToServer::KillClient(ip)).await;
+                    let _ = client_data.server.channel.send(MessageToServer::KillClient(client_data.addr)).await;
 
                     warn!("Received empty message from framed reader so client is being shut down");
 

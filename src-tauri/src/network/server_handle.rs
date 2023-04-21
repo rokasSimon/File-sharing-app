@@ -69,6 +69,8 @@ pub async fn server_loop(
 }
 
 async fn add_client(clients: &mut HashMap<ClientConnectionId, ClientHandle>, tcp: TcpStream, addr: ClientConnectionId, server: &ServerHandle) {
+    warn!("Adding client with address {}", addr);
+
     let (passive_sender, passive_receiver) = mpsc::channel(CHANNEL_SIZE);
     let (active_sender, active_receiver) = mpsc::channel(CHANNEL_SIZE);
 
@@ -76,7 +78,8 @@ async fn add_client(clients: &mut HashMap<ClientConnectionId, ClientHandle>, tcp
         server: server.clone(),
         stream: tcp,
         passive_receiver,
-        active_receiver
+        active_receiver,
+        addr
     };
 
     let join = tauri::async_runtime::spawn(client_loop(client_data));
