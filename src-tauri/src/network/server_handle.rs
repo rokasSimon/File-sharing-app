@@ -6,7 +6,7 @@ use tokio::{sync::{mpsc::{Sender, self}}, net::TcpStream};
 
 use crate::{config::StoredConfig, peer_id::PeerId};
 
-use super::{client_handle::{ClientData, ClientHandle, client_loop, MessageFromServer}};
+use super::{client_handle::{ClientData, ClientHandle, client_loop, MessageFromServer}, mdns::MessageToMdns};
 
 const CHANNEL_SIZE: usize = 64;
 const UPDATE_PERIOD: u64 = 10;
@@ -30,7 +30,8 @@ pub enum MessageToServer {
 struct ServerData<'a> {
     //recv: &'a mut Receiver<MessageToServer>,
     server_handle: &'a ServerHandle,
-    clients: &'a mut HashMap<ClientConnectionId, ClientHandle>
+    clients: &'a mut HashMap<ClientConnectionId, ClientHandle>,
+    mdns_sender: &'a mpsc::Sender<MessageToMdns>,
 }
 
 impl ServerHandle {
@@ -39,6 +40,7 @@ impl ServerHandle {
 
 pub async fn server_loop(
     mut recv: Receiver<MessageToServer>,
+    mdns_sender: mpsc::Sender<MessageToMdns>,
     server_handle: ServerHandle
 ) {
     let mut clients: HashMap<ClientConnectionId, ClientHandle> = HashMap::new();
@@ -50,7 +52,8 @@ pub async fn server_loop(
                 let server_data = ServerData {
                     //recv: &mut recv,
                     server_handle: &server_handle,
-                    clients: &mut clients
+                    clients: &mut clients,
+                    mdns_sender: &mdns_sender
                 };
 
                 handle_message(msg, server_data).await;
@@ -59,7 +62,8 @@ pub async fn server_loop(
                 let server_data = ServerData {
                     //recv: &mut recv,
                     server_handle: &server_handle,
-                    clients: &mut clients
+                    clients: &mut clients,
+                    mdns_sender: &mdns_sender
                 };
 
                 do_periodic_work(server_data).await;
@@ -68,7 +72,7 @@ pub async fn server_loop(
     }
 }
 
-async fn add_client(clients: &mut HashMap<ClientConnectionId, ClientHandle>, tcp: TcpStream, addr: ClientConnectionId, server: &ServerHandle) {
+async fn add_client(clients: &mut HashMap<ClientConnectionId, ClientHandle>, tcp: TcpStream, addr: ClientConnectionId, server: &ServerHandle, service_info: Option<ServiceInfo>) {
     warn!("Adding client with address {}", addr);
 
     let (passive_sender, passive_receiver) = mpsc::channel(CHANNEL_SIZE);
@@ -88,7 +92,8 @@ async fn add_client(clients: &mut HashMap<ClientConnectionId, ClientHandle>, tcp
         id: None,
         passive_sender,
         active_sender,
-        join
+        join,
+        service_info
     };
 
     let _ = clients.insert(addr, client);
@@ -136,7 +141,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                         match connection_result {
                             Ok(tcp_stream) => {
-                                add_client(&mut server_data.clients, tcp_stream, ip_addr, &server_data.server_handle).await;
+                                add_client(&mut server_data.clients, tcp_stream, ip_addr, &server_data.server_handle, Some(service)).await;
                             },
                             Err(e) => error!("{}", e)
                         }
@@ -152,7 +157,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             let ip_addr = addr.ip();
 
             if !server_data.clients.contains_key(&ip_addr) {
-                add_client(&mut server_data.clients, tcp, ip_addr, &server_data.server_handle).await;
+                add_client(&mut server_data.clients, tcp, ip_addr, &server_data.server_handle, None).await;
             } else {
                 warn!("Client already connected: {}", addr);
             }
@@ -177,6 +182,10 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             match client {
                 Some(client) => {
                     client.join.abort();
+
+                    if let Some(service) = client.service_info {
+                        let _ = server_data.mdns_sender.send(MessageToMdns::RemoveService(service)).await;
+                    }
                 },
                 None => {
                     error!("No such client to drop: {}", client_addr);

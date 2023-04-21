@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use futures::{StreamExt, SinkExt};
+use mdns_sd::ServiceInfo;
 use tauri::async_runtime::{JoinHandle};
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -25,7 +26,8 @@ pub struct ClientHandle {
     pub id: Option<PeerId>,
     pub passive_sender: mpsc::Sender<MessageFromServer>,
     pub active_sender: mpsc::Sender<MessageFromServer>,
-    pub join: JoinHandle<()>
+    pub join: JoinHandle<()>,
+    pub service_info: Option<ServiceInfo>
 }
 
 pub async fn client_loop(mut client_data: ClientData) {

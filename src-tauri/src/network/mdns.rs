@@ -16,11 +16,16 @@ pub const MDNS_UPDATE_TIME: u64 = 120;
 
 const MDNS_PORT: u16 = 61000;
 
+pub enum MessageToMdns {
+    RemoveService(ServiceInfo)
+}
+
 pub struct MdnsHandle {
     pub info: ServiceInfo,
 }
 
 pub async fn start_mdns(
+    mut server_recv: mpsc::Receiver<MessageToMdns>,
     addr_recv: oneshot::Receiver<SocketAddr>,
     server_handle: ServerHandle,
     peer_id: PeerId,
@@ -66,6 +71,15 @@ pub async fn start_mdns(
                 match event {
                     Ok(ev) => handle_mdns_event(&ev, &server_handle, &host_name).await,
                     Err(err) => error!("Event received was error: {}", err)
+                }
+            }
+            Some(server_action) = server_recv.recv() => {
+                match server_action {
+                    MessageToMdns::RemoveService(service_to_remove) => {
+                        if let Err(e) = mdns.unregister(service_to_remove.get_fullname()) {
+                            error!("Could not unregister mDNS service: {}", e);
+                        }
+                    }
                 }
             }
             _ = interval.tick() => {
