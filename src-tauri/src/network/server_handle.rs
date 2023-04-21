@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::{SocketAddr, SocketAddrV4}, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::{SocketAddr, SocketAddrV4, Ipv4Addr, IpAddr}, sync::Arc, time::Duration};
 
 use mdns_sd::ServiceInfo;
 use tauri::async_runtime::{Receiver};
@@ -18,17 +18,19 @@ pub struct ServerHandle {
     pub peer_id: PeerId
 }
 
+pub type ClientConnectionId = IpAddr;
+
 pub enum MessageToServer {
-    SetPeerId(SocketAddr, PeerId),
+    SetPeerId(ClientConnectionId, PeerId),
     ServiceFound(ServiceInfo),
     ConnectionAccepted(TcpStream, SocketAddr),
-    KillClient(SocketAddr)
+    KillClient(ClientConnectionId)
 }
 
 struct ServerData<'a> {
     //recv: &'a mut Receiver<MessageToServer>,
     server_handle: &'a ServerHandle,
-    clients: &'a mut HashMap<SocketAddr, ClientHandle>
+    clients: &'a mut HashMap<ClientConnectionId, ClientHandle>
 }
 
 impl ServerHandle {
@@ -39,7 +41,7 @@ pub async fn server_loop(
     mut recv: Receiver<MessageToServer>,
     server_handle: ServerHandle
 ) {
-    let mut clients: HashMap<SocketAddr, ClientHandle> = HashMap::new();
+    let mut clients: HashMap<ClientConnectionId, ClientHandle> = HashMap::new();
     let mut interval = tokio::time::interval(Duration::from_secs(UPDATE_PERIOD));
 
     loop {
@@ -66,7 +68,7 @@ pub async fn server_loop(
     }
 }
 
-async fn add_client(clients: &mut HashMap<SocketAddr, ClientHandle>, tcp: TcpStream, addr: SocketAddr, server: &ServerHandle) {
+async fn add_client(clients: &mut HashMap<ClientConnectionId, ClientHandle>, tcp: TcpStream, addr: ClientConnectionId, server: &ServerHandle) {
     let (passive_sender, passive_receiver) = mpsc::channel(CHANNEL_SIZE);
     let (active_sender, active_receiver) = mpsc::channel(CHANNEL_SIZE);
 
@@ -122,15 +124,16 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                         Err(_) => return
                     };
 
+                    let ip_addr = IpAddr::V4(*ip);
                     let socket_addr = SocketAddrV4::new(*ip, port);
                     let socket_addr = SocketAddr::V4(socket_addr);
 
-                    if !server_data.clients.contains_key(&socket_addr) {
+                    if !server_data.clients.contains_key(&ip_addr) {
                         let connection_result = TcpStream::connect(socket_addr).await;
 
                         match connection_result {
                             Ok(tcp_stream) => {
-                                add_client(&mut server_data.clients, tcp_stream, socket_addr, &server_data.server_handle).await;
+                                add_client(&mut server_data.clients, tcp_stream, ip_addr, &server_data.server_handle).await;
                             },
                             Err(e) => error!("{}", e)
                         }
@@ -143,8 +146,10 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
         }
 
         MessageToServer::ConnectionAccepted(tcp, addr) => {
-            if !server_data.clients.contains_key(&addr) {
-                add_client(&mut server_data.clients, tcp, addr, &server_data.server_handle).await;
+            let ip_addr = addr.ip();
+
+            if !server_data.clients.contains_key(&ip_addr) {
+                add_client(&mut server_data.clients, tcp, ip_addr, &server_data.server_handle).await;
             } else {
                 warn!("Client already connected: {}", addr);
             }

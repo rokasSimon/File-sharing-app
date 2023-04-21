@@ -29,6 +29,7 @@ pub struct ClientHandle {
 
 pub async fn client_loop(mut client_data: ClientData) {
     let addr = client_data.stream.local_addr().expect("should be able to get socket address");
+    let ip = addr.ip();
     let (read, write) = client_data.stream.split();
 
     let mut framed_reader = FramedRead::new(read, MessageCodec {});
@@ -56,7 +57,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                                     warn!("Received {} peer id", &id);
 
                                     client_peer_id = Some(id);
-                                    let _ = client_data.server.channel.send(MessageToServer::SetPeerId(addr, client_peer_id.unwrap())).await;
+                                    let _ = client_data.server.channel.send(MessageToServer::SetPeerId(ip, client_peer_id.unwrap())).await;
                                 }
 
                                 _ => { }
@@ -65,7 +66,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                         Err(e) => error!("{}", e)
                     }
                 } else {
-                    let _ = client_data.server.channel.send(MessageToServer::KillClient(addr.clone())).await;
+                    let _ = client_data.server.channel.send(MessageToServer::KillClient(ip)).await;
 
                     warn!("Received empty message from framed reader so client is being shut down");
 

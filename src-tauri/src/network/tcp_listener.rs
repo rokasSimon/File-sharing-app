@@ -17,6 +17,8 @@ pub async fn start_accept(
     loop {
         let (tcp, ip) = tcp_listener.accept().await?;
 
+        warn!("Accepted connection from {}", ip);
+
         let msg = MessageToServer::ConnectionAccepted(tcp, ip);
 
         let _ = server_handle.channel.send(msg).await;
