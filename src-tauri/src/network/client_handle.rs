@@ -65,7 +65,9 @@ pub async fn client_loop(mut client_data: ClientData) {
                         Err(e) => error!("{}", e)
                     }
                 } else {
-                    error!("Received empty message from framed reader");
+                    let _ = client_data.server.channel.send(MessageToServer::KillClient(addr.clone())).await;
+
+                    warn!("Received empty message from framed reader so client is being shut down");
                 }
             }
             server_message = client_data.passive_receiver.recv() => {

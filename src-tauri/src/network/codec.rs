@@ -22,19 +22,17 @@ impl Encoder<TcpMessage> for MessageCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: TcpMessage, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let enc = postcard::to_stdvec_cobs(&item).expect("TcpMessage enum values should serialize without trouble");
-        let len = enc.len() + LENGTH_MARKER_SIZE;
-
-        if len > MAX_MESSAGE_SIZE {
-            // split large messages into parts
-            todo!();
-        }
+        let encoded_message = match encode_message(item) {
+            Ok(msg) => msg,
+            Err(e) => return Err(e)
+        };
+        let len = encoded_message.len();
 
         let u32_len = u32::try_from(len).expect("large messages should have been handled by this point");
 
         dst.reserve(len);
         dst.put_u32(u32_len);
-        dst.put_slice(&enc[..]);
+        dst.put_slice(&encoded_message);
 
         Ok(())
     }
@@ -66,19 +64,39 @@ impl Decoder for MessageCodec {
             return Ok(None);
         }
 
-        let data = &src[LENGTH_MARKER_SIZE..length];
-        let result = match postcard::from_bytes(data) {
-            Ok(tcp_message) => Ok(Some(tcp_message)),
-            Err(decode_err) => {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("Could not parse message from received buffer: {}", decode_err),
-                ))
-            }
-        };
-
         src.advance(length);
 
-        result
+        decode_message(src, length)
     }
+}
+
+fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage>, std::io::Error> {
+
+    let mut data = &mut src[LENGTH_MARKER_SIZE..length];
+
+    let result = match postcard::from_bytes_cobs(&mut data) {
+        Ok(tcp_message) => Ok(Some(tcp_message)),
+        Err(decode_err) => {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Could not parse message from received buffer: {}", decode_err),
+            ))
+        }
+    };
+
+    result
+}
+
+fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
+    let enc = postcard::to_stdvec_cobs(&src).expect("TcpMessage enum values should serialize without trouble");
+    let len = enc.len() + LENGTH_MARKER_SIZE;
+
+    if len > MAX_MESSAGE_SIZE {
+        // split large messages into parts
+        error!("Message too large to encode!");
+        
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Message too large to encode")));
+    }
+
+    Ok(enc)
 }

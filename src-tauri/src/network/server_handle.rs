@@ -22,7 +22,8 @@ pub struct ServerHandle {
 pub enum MessageToServer {
     SetPeerId(SocketAddr, PeerId),
     ServiceFound(ServiceInfo),
-    ConnectionAccepted(TcpStream, SocketAddr)
+    ConnectionAccepted(TcpStream, SocketAddr),
+    KillClient(SocketAddr)
 }
 
 impl ServerHandle {
@@ -93,6 +94,19 @@ pub async fn server_loop(
                     },
                     None => {
                         error!("No such client for {}", addr);
+                    }
+                }
+            }
+
+            MessageToServer::KillClient(client_addr) => {
+                let client = clients.remove(&client_addr);
+
+                match client {
+                    Some(client) => {
+                        client.join.abort();
+                    },
+                    None => {
+                        error!("No such client to drop: {}", client_addr);
                     }
                 }
             }
