@@ -1,16 +1,15 @@
-use std::{collections::HashMap, net::{SocketAddr, Ipv4Addr, SocketAddrV4}, sync::Arc};
+use std::{collections::HashMap, net::{SocketAddr, SocketAddrV4}, sync::Arc, time::Duration};
 
-use anyhow::Result;
 use mdns_sd::ServiceInfo;
 use tauri::async_runtime::{Receiver};
 use tokio::{sync::{mpsc::{Sender, self}}, net::TcpStream};
-use uuid::Uuid;
 
 use crate::{config::StoredConfig, peer_id::PeerId};
 
 use super::{client_handle::{ClientData, ClientHandle, client_loop, MessageFromServer}};
 
 const CHANNEL_SIZE: usize = 64;
+const UPDATE_PERIOD: u64 = 10;
 
 #[derive(Clone)]
 pub struct ServerHandle {
@@ -26,6 +25,12 @@ pub enum MessageToServer {
     KillClient(SocketAddr)
 }
 
+struct ServerData<'a> {
+    //recv: &'a mut Receiver<MessageToServer>,
+    server_handle: &'a ServerHandle,
+    clients: &'a mut HashMap<SocketAddr, ClientHandle>
+}
+
 impl ServerHandle {
     
 }
@@ -35,84 +40,27 @@ pub async fn server_loop(
     server_handle: ServerHandle
 ) {
     let mut clients: HashMap<SocketAddr, ClientHandle> = HashMap::new();
+    let mut interval = tokio::time::interval(Duration::from_secs(UPDATE_PERIOD));
 
-    while let Some(msg) = recv.recv().await {
-        match msg {
+    loop {
+        tokio::select! {
+            Some(msg) = recv.recv() => {
+                let server_data = ServerData {
+                    //recv: &mut recv,
+                    server_handle: &server_handle,
+                    clients: &mut clients
+                };
 
-            MessageToServer::ServiceFound(service) => {
-                let ip_addr = service.get_addresses().iter().next();
-
-                match ip_addr {
-                    Some(ip) => {
-                        let properties = service.get_properties();
-                        let port = properties.get("port");
-
-                        let port = match port {
-                            Some(p) => p,
-                            None => continue
-                        };
-
-                        let port: u16 = match port.parse() {
-                            Ok(p) => p,
-                            Err(_) => continue
-                        };
-
-                        let socket_addr = SocketAddrV4::new(*ip, port);
-                        let socket_addr = SocketAddr::V4(socket_addr);
-
-                        if !clients.contains_key(&socket_addr) {
-                            let connection_result = TcpStream::connect(socket_addr).await;
-
-                            match connection_result {
-                                Ok(tcp_stream) => {
-                                    add_client(&mut clients, tcp_stream, socket_addr, &server_handle).await;
-                                },
-                                Err(e) => error!("{}", e)
-                            }
-                        } else {
-                            warn!("Client already connected: {}", socket_addr);
-                        }
-                    },
-                    None => error!("Service had no associated IP addresses")
-                }
+                handle_message(msg, server_data).await;
             }
+            _ = interval.tick() => {
+                let server_data = ServerData {
+                    //recv: &mut recv,
+                    server_handle: &server_handle,
+                    clients: &mut clients
+                };
 
-            MessageToServer::ConnectionAccepted(tcp, addr) => {
-                if !clients.contains_key(&addr) {
-                    add_client(&mut clients, tcp, addr, &server_handle).await;
-                } else {
-                    warn!("Client already connected: {}", addr);
-                }
-            }
-
-            MessageToServer::SetPeerId(addr, id) => {
-                let client = clients.get_mut(&addr);
-
-                match client {
-                    Some(client) => {
-                        client.id = Some(id);
-                    },
-                    None => {
-                        error!("No such client for {}", addr);
-                    }
-                }
-            }
-
-            MessageToServer::KillClient(client_addr) => {
-                let client = clients.remove(&client_addr);
-
-                match client {
-                    Some(client) => {
-                        client.join.abort();
-                    },
-                    None => {
-                        error!("No such client to drop: {}", client_addr);
-                    }
-                }
-            }
-
-            _ => {
-                info!("Something was sent to server handle");
+                do_periodic_work(server_data).await;
             }
         }
     }
@@ -138,15 +86,98 @@ async fn add_client(clients: &mut HashMap<SocketAddr, ClientHandle>, tcp: TcpStr
         join
     };
 
-    let send_result  = client.passive_sender.send(MessageFromServer::GetPeerId).await;
+    let _ = clients.insert(addr, client);
+}
 
-    if let Err(e) = send_result {
-        error!("{}", e);
+async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
+    for (key, value) in server_data.clients {
+        if value.id.is_none() {
+            let send_result = value.passive_sender.send(MessageFromServer::GetPeerId).await;
+
+            if let Err(e) = send_result {
+                error!("Could not send value to client {} because {}", key, e);
+            }
+        }
     }
+}
 
-    let add_result = clients.insert(addr, client);
+async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a>) {
+    match msg {
 
-    if let None = add_result {
-        error!("Could not add client: {}", addr);
+        MessageToServer::ServiceFound(service) => {
+            let ip_addr = service.get_addresses().iter().next();
+
+            match ip_addr {
+                Some(ip) => {
+                    let properties = service.get_properties();
+                    let port = properties.get("port");
+
+                    let port = match port {
+                        Some(p) => p,
+                        None => return
+                    };
+
+                    let port: u16 = match port.parse() {
+                        Ok(p) => p,
+                        Err(_) => return
+                    };
+
+                    let socket_addr = SocketAddrV4::new(*ip, port);
+                    let socket_addr = SocketAddr::V4(socket_addr);
+
+                    if !server_data.clients.contains_key(&socket_addr) {
+                        let connection_result = TcpStream::connect(socket_addr).await;
+
+                        match connection_result {
+                            Ok(tcp_stream) => {
+                                add_client(&mut server_data.clients, tcp_stream, socket_addr, &server_data.server_handle).await;
+                            },
+                            Err(e) => error!("{}", e)
+                        }
+                    } else {
+                        warn!("Client already connected: {}", socket_addr);
+                    }
+                },
+                None => error!("Service had no associated IP addresses")
+            }
+        }
+
+        MessageToServer::ConnectionAccepted(tcp, addr) => {
+            if !server_data.clients.contains_key(&addr) {
+                add_client(&mut server_data.clients, tcp, addr, &server_data.server_handle).await;
+            } else {
+                warn!("Client already connected: {}", addr);
+            }
+        }
+
+        MessageToServer::SetPeerId(addr, id) => {
+            let client = server_data.clients.get_mut(&addr);
+
+            match client {
+                Some(client) => {
+                    client.id = Some(id);
+                },
+                None => {
+                    error!("No such client for {}", addr);
+                }
+            }
+        }
+
+        MessageToServer::KillClient(client_addr) => {
+            let client = server_data.clients.remove(&client_addr);
+
+            match client {
+                Some(client) => {
+                    client.join.abort();
+                },
+                None => {
+                    error!("No such client to drop: {}", client_addr);
+                }
+            }
+        }
+
+        _ => {
+            info!("Something was sent to server handle");
+        }
     }
 }
