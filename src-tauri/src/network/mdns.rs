@@ -86,11 +86,10 @@ async fn handle_mdns_event(event: &ServiceEvent, server_handle: &ServerHandle, m
             warn!("Resolved service {:?}", service);
 
             if service.get_hostname() != my_hostname {
+                warn!("Adding service: {:?}", service);
+
                 let _ = server_handle.channel.send(MessageToServer::ServiceFound(service.clone())).await;
             }
-        }
-        ServiceEvent::ServiceFound(t, f) => {
-            warn!("Found service {}", f);
         }
         ServiceEvent::ServiceRemoved(service_type, fullname) => {
             warn!("Removed service {} {}", service_type, fullname);

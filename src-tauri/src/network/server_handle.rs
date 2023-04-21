@@ -138,7 +138,15 @@ async fn add_client(clients: &mut HashMap<SocketAddr, ClientHandle>, tcp: TcpStr
         join
     };
 
-    let _  = client.passive_sender.send(MessageFromServer::GetPeerId).await;
+    let send_result  = client.passive_sender.send(MessageFromServer::GetPeerId).await;
 
-    let _ = clients.insert(addr, client);
+    if let Err(e) = send_result {
+        error!("{}", e);
+    }
+
+    let add_result = clients.insert(addr, client);
+
+    if let None = add_result {
+        error!("Could not add client: {}", addr);
+    }
 }
