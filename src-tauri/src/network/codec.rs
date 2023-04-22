@@ -7,7 +7,7 @@ use crate::peer_id::PeerId;
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 4; // 4 MB
 const LENGTH_MARKER_SIZE: usize = 4;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum TcpMessage {
     RequestPeerId,
     SendPeerId(PeerId),
@@ -26,7 +26,7 @@ impl Encoder<TcpMessage> for MessageCodec {
             Ok(msg) => msg,
             Err(e) => return Err(e)
         };
-        let len = encoded_message.len();
+        let len = encoded_message.len() + LENGTH_MARKER_SIZE;
 
         let u32_len = u32::try_from(len).expect("large messages should have been handled by this point");
 
@@ -75,7 +75,11 @@ fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage
     let mut data = &mut src[LENGTH_MARKER_SIZE..length];
 
     let result = match serde_json::from_slice(&mut data) {
-        Ok(tcp_message) => Ok(Some(tcp_message)),
+        Ok(tcp_message) => {
+            warn!("decoded {:?}", tcp_message);
+
+            Ok(Some(tcp_message))
+        },
         Err(decode_err) => {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -90,6 +94,9 @@ fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage
 fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
     let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
     let len = enc.len() + LENGTH_MARKER_SIZE;
+
+    let tstr = serde_json::to_string(&src).unwrap();
+    warn!("Encoded data = {}", tstr);
 
     if len > MAX_MESSAGE_SIZE {
         // split large messages into parts
