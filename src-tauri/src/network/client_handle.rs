@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::IpAddr};
 
 use futures::{StreamExt, SinkExt};
 use mdns_sd::ServiceInfo;
@@ -37,7 +37,7 @@ pub async fn client_loop(mut client_data: ClientData) {
     let mut framed_writer = FramedWrite::new(write, MessageCodec {});
     let mut unfinished_messages: HashMap<u8, Vec<TcpMessage>> = HashMap::new();
     let mut client_peer_id: Option<PeerId> = None;
-
+    
     loop {
         tokio::select! {
             incoming = framed_reader.next() => {
@@ -51,6 +51,8 @@ pub async fn client_loop(mut client_data: ClientData) {
 
                                     if let Err(e) = res {
                                         error!("{}", e);
+
+                                        disconnect_self(client_data.server.clone(), client_data.addr).await;
                                     }
                                 },
 
@@ -67,9 +69,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                         Err(e) => error!("{}", e)
                     }
                 } else {
-                    let _ = client_data.server.channel.send(MessageToServer::KillClient(client_data.addr)).await;
-
-                    warn!("Received empty message from framed reader so client is being shut down");
+                    disconnect_self(client_data.server.clone(), client_data.addr).await;
 
                     return;
                 }
@@ -83,6 +83,8 @@ pub async fn client_loop(mut client_data: ClientData) {
 
                             if let Err(e) = result {
                                 error!("{}", e);
+
+                                disconnect_self(client_data.server.clone(), client_data.addr).await;
                             }
                         },
                         
@@ -92,4 +94,10 @@ pub async fn client_loop(mut client_data: ClientData) {
             }
         }
     }
+}
+
+async fn disconnect_self(server_handle: ServerHandle, addr: IpAddr) {
+    let _ = server_handle.channel.send(MessageToServer::KillClient(addr)).await;
+
+    warn!("Disconneting client {}.", addr);
 }
