@@ -1,8 +1,7 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path};
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
-use tauri::async_runtime::Mutex;
 
 #[derive(Serialize, Deserialize)]
 pub struct ShareDirectory {
@@ -14,7 +13,7 @@ pub struct ShareDirectory {
 pub struct SharedFile {
     name: String,
     content_hash: String,
-    last_modified: DateTime<Local>,
+    last_modified: DateTime<Utc>,
     content_location: ContentLocation
 }
 

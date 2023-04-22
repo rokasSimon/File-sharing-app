@@ -3,6 +3,7 @@ use std::{
 };
 
 use anyhow::Result;
+use chrono::{DateTime, Local, Utc, NaiveTime};
 use if_addrs::{IfAddr, Ifv4Addr};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use tokio::{sync::{oneshot, mpsc}, net::TcpStream};
@@ -17,7 +18,18 @@ pub const MDNS_UPDATE_TIME: u64 = 120;
 const MDNS_PORT: u16 = 61000;
 
 pub enum MessageToMdns {
-    RemoveService(ServiceInfo)
+    RemoveService(ServiceInfo),
+    ConnectedService(ServiceInfo)
+}
+
+pub struct ResolvedServiceInfo {
+    pub service_info: ServiceInfo,
+    pub status: ServiceStatus
+}
+
+pub enum ServiceStatus {
+    Disconnected(DateTime<Utc>),
+    Connected
 }
 
 pub struct MdnsHandle {
@@ -60,10 +72,11 @@ pub async fn start_mdns(
     )
     .expect("should be able to create service info");
 
-    let _ = mdns.register(service_info.clone());
-
     let service_receiver = mdns.browse(SERVICE_TYPE).expect("should start mDNS browse");
-    let mut interval = tokio::time::interval(Duration::from_secs(MDNS_UPDATE_TIME));
+
+    let reconnect_time = chrono::Duration::seconds(60);
+    let mut reregister_interval = tokio::time::interval(Duration::from_secs(MDNS_UPDATE_TIME));
+    let mut resolved_services: HashMap<String, ResolvedServiceInfo> = HashMap::new();
 
     loop {
         tokio::select! {
@@ -75,19 +88,43 @@ pub async fn start_mdns(
             }
             Some(server_action) = server_recv.recv() => {
                 match server_action {
+
                     MessageToMdns::RemoveService(service_to_remove) => {
-                        if let Err(e) = mdns.unregister(service_to_remove.get_fullname()) {
-                            error!("Could not unregister mDNS service: {}", e);
+                        if let Some(mut service) = resolved_services.get_mut(service_to_remove.get_fullname()) {
+                            let current_time = Utc::now();
+                            warn!("Disconnecting service at {}", current_time);
+                            service.status = ServiceStatus::Disconnected(current_time);
+                        }
+                    }
+
+                    MessageToMdns::ConnectedService(service_connected) => {
+                        if let Some(mut service) = resolved_services.get_mut(service_connected.get_fullname()) {
+                            warn!("Connected service {}", service_connected.get_fullname());
+                            service.status = ServiceStatus::Connected;
                         }
                     }
                 }
             }
-            _ = interval.tick() => {
+            _ = reregister_interval.tick() => {
                 let res = mdns.register(service_info.clone());
 
                 match res {
-                    Ok(()) => (),
+                    Ok(()) => warn!("Registered info again"),
                     Err(e) => error!("{}", e)
+                };
+
+                for (_, rsv) in resolved_services.iter() {
+                    match rsv.status {
+                        ServiceStatus::Connected => (),
+                        ServiceStatus::Disconnected(disconnect_time) => {
+                            let current_time = Utc::now();
+                            let time_diff = current_time - disconnect_time;
+
+                            if time_diff >= reconnect_time {
+                                let _ = server_handle.channel.send(MessageToServer::ServiceFound(rsv.service_info.clone())).await;
+                            }
+                        }
+                    }
                 }
             }
         }

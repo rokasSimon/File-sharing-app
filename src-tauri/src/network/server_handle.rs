@@ -141,7 +141,11 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                         match connection_result {
                             Ok(tcp_stream) => {
-                                add_client(&mut server_data.clients, tcp_stream, ip_addr, &server_data.server_handle, Some(service)).await;
+                                add_client(&mut server_data.clients, tcp_stream, ip_addr, &server_data.server_handle, Some(service.clone())).await;
+
+                                if server_data.clients.contains_key(&ip_addr) {
+                                    let _ = server_data.mdns_sender.send(MessageToMdns::ConnectedService(service)).await;
+                                }
                             },
                             Err(e) => error!("{}", e)
                         }
