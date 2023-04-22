@@ -100,15 +100,27 @@ async fn add_client(clients: &mut HashMap<ClientConnectionId, ClientHandle>, tcp
 }
 
 async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
-    for (key, value) in server_data.clients {
+    let mut cliends_to_remove = vec![];
+
+    for (key, value) in &*server_data.clients {
         info!("Iterating over client {} | {:?}", key, value.service_info);
 
         if value.id.is_none() {
             let send_result = value.passive_sender.send(MessageFromServer::GetPeerId).await;
 
             if let Err(e) = send_result {
-                error!("Could not send value to client {} because {}", key, e);
+                error!("Could not send value to client {} because {}. Client will be disconnected.", key, e);
+                cliends_to_remove.push(key.to_owned());
             }
+        }
+    }
+
+    for client_key in cliends_to_remove.iter() {
+        let removed = server_data.clients.remove(client_key);
+
+        match removed {
+            Some(client) => client.join.abort(),
+            None => ()
         }
     }
 }

@@ -72,7 +72,7 @@ impl Decoder for MessageCodec {
 
 fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage>, std::io::Error> {
 
-    let mut data = &mut src[LENGTH_MARKER_SIZE..length];
+    let mut data = &mut src[LENGTH_MARKER_SIZE..length - 1];
 
     let result = match serde_json::from_slice(&mut data) {
         Ok(tcp_message) => {
