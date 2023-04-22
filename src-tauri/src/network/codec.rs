@@ -69,11 +69,15 @@ impl Decoder for MessageCodec {
 
         src.advance(full_length);
 
+        info!("buf length = {}", src.len());
+
         decode_message(src, full_length)
     }
 }
 
 fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage>, std::io::Error> {
+
+    info!("buf length = {}", src.len());
 
     let mut data = &mut src[LENGTH_MARKER_SIZE..length];
 
