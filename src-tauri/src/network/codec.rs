@@ -49,7 +49,7 @@ impl Decoder for MessageCodec {
 
         let mut length_bytes = [0; LENGTH_MARKER_SIZE];
         length_bytes.copy_from_slice(&src[..LENGTH_MARKER_SIZE]);
-        let length = u32::from_le_bytes(length_bytes) as usize;
+        let length = u32::from_be_bytes(length_bytes) as usize;
 
         if length > MAX_MESSAGE_SIZE {
             return Err(std::io::Error::new(
@@ -76,7 +76,7 @@ fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage
 
     let result = match serde_json::from_slice(&mut data) {
         Ok(tcp_message) => {
-            warn!("decoded {:?}", tcp_message);
+            debug!("decoded {:?}", tcp_message);
 
             Ok(Some(tcp_message))
         },
@@ -94,9 +94,6 @@ fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage
 fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
     let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
     let len = enc.len() + LENGTH_MARKER_SIZE;
-
-    let tstr = serde_json::to_string(&src).unwrap();
-    warn!("Encoded data = {}", tstr);
 
     if len > MAX_MESSAGE_SIZE {
         // split large messages into parts
