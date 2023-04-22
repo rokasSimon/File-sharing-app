@@ -74,7 +74,7 @@ fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage
 
     let mut data = &mut src[LENGTH_MARKER_SIZE..length];
 
-    let result = match postcard::from_bytes_cobs(&mut data) {
+    let result = match serde_json::from_slice(&mut data) {
         Ok(tcp_message) => Ok(Some(tcp_message)),
         Err(decode_err) => {
             Err(std::io::Error::new(
@@ -88,7 +88,7 @@ fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage
 }
 
 fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
-    let enc = postcard::to_stdvec_cobs(&src).expect("TcpMessage enum values should serialize without trouble");
+    let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
     let len = enc.len() + LENGTH_MARKER_SIZE;
 
     if len > MAX_MESSAGE_SIZE {

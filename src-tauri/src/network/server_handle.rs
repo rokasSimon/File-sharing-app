@@ -101,6 +101,8 @@ async fn add_client(clients: &mut HashMap<ClientConnectionId, ClientHandle>, tcp
 
 async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
     for (key, value) in server_data.clients {
+        warn!("Iterating over client {} | {:?}", key, value.service_info);
+
         if value.id.is_none() {
             let send_result = value.passive_sender.send(MessageFromServer::GetPeerId).await;
 
