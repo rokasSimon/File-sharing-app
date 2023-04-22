@@ -53,6 +53,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                                         error!("{}", e);
 
                                         disconnect_self(client_data.server.clone(), client_data.addr).await;
+                                        return;
                                     }
                                 },
 
@@ -70,7 +71,6 @@ pub async fn client_loop(mut client_data: ClientData) {
                     }
                 } else {
                     disconnect_self(client_data.server.clone(), client_data.addr).await;
-
                     return;
                 }
             }
@@ -85,6 +85,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                                 error!("{}", e);
 
                                 disconnect_self(client_data.server.clone(), client_data.addr).await;
+                                return;
                             }
                         },
                         

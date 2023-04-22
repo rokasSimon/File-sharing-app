@@ -1,16 +1,21 @@
 use std::{
-    net::{IpAddr, SocketAddr, SocketAddrV4, Ipv4Addr}, time::Duration, collections::HashMap,
+    collections::HashMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
+    time::Duration,
 };
 
 use anyhow::Result;
-use chrono::{DateTime, Local, Utc, NaiveTime};
+use chrono::{DateTime, Local, NaiveTime, Utc};
 use if_addrs::{IfAddr, Ifv4Addr};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
-use tokio::{sync::{oneshot, mpsc}, net::TcpStream};
+use tokio::{
+    net::TcpStream,
+    sync::{mpsc, oneshot},
+};
 
 use crate::peer_id::PeerId;
 
-use super::{server_handle::{MessageToServer, ServerHandle}};
+use super::server_handle::{MessageToServer, ServerHandle};
 
 pub const SERVICE_TYPE: &str = "_ktu_fileshare._tcp.local.";
 pub const MDNS_UPDATE_TIME: u64 = 120;
@@ -19,17 +24,17 @@ const MDNS_PORT: u16 = 61000;
 
 pub enum MessageToMdns {
     RemoveService(ServiceInfo),
-    ConnectedService(ServiceInfo)
+    ConnectedService(ServiceInfo),
 }
 
 pub struct ResolvedServiceInfo {
     pub service_info: ServiceInfo,
-    pub status: ServiceStatus
+    pub status: ServiceStatus,
 }
 
 pub enum ServiceStatus {
     Disconnected(DateTime<Utc>),
-    Connected
+    Connected,
 }
 
 pub struct MdnsHandle {
@@ -41,7 +46,7 @@ pub async fn start_mdns(
     addr_recv: oneshot::Receiver<SocketAddr>,
     server_handle: ServerHandle,
     peer_id: PeerId,
-    intf_addr: Ipv4Addr
+    intf_addr: Ipv4Addr,
 ) -> Result<()> {
     let local_addr = addr_recv.await?;
     let ip = local_addr.ip();
@@ -57,9 +62,7 @@ pub async fn start_mdns(
 
     let addr = [intf_addr];
 
-    let properties = HashMap::from([
-        ("port".to_owned(), local_addr.port().to_string())
-    ]);
+    let properties = HashMap::from([("port".to_owned(), local_addr.port().to_string())]);
 
     let mdns = ServiceDaemon::new().expect("should be able to create mDNS daemon");
     let service_info = ServiceInfo::new(
@@ -98,10 +101,11 @@ pub async fn start_mdns(
                     }
 
                     MessageToMdns::ConnectedService(service_connected) => {
-                        if let Some(mut service) = resolved_services.get_mut(service_connected.get_fullname()) {
-                            info!("Connected service {}", service_connected.get_fullname());
-                            service.status = ServiceStatus::Connected;
-                        }
+                        info!("Connected service {}", service_connected.get_fullname());
+                        resolved_services.insert(service_connected.get_fullname().to_owned(), ResolvedServiceInfo {
+                            service_info: service_connected,
+                            status: ServiceStatus::Connected
+                        });
                     }
                 }
             }
@@ -139,12 +143,15 @@ async fn handle_mdns_event(event: &ServiceEvent, server_handle: &ServerHandle, m
             if service.get_hostname() != my_hostname {
                 info!("Adding service: {:?}", service);
 
-                let _ = server_handle.channel.send(MessageToServer::ServiceFound(service.clone())).await;
+                let _ = server_handle
+                    .channel
+                    .send(MessageToServer::ServiceFound(service.clone()))
+                    .await;
             }
         }
         ServiceEvent::ServiceRemoved(service_type, fullname) => {
             warn!("Removed service {} {}", service_type, fullname);
         }
-        _ => ()
+        _ => (),
     }
 }
