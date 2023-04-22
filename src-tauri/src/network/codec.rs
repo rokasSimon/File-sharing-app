@@ -1,3 +1,4 @@
+use postcard::fixint::le;
 use serde::{Serialize, Deserialize};
 use tokio_util::codec::{Encoder, Decoder};
 use bytes::{BytesMut, BufMut, Buf};
@@ -26,11 +27,11 @@ impl Encoder<TcpMessage> for MessageCodec {
             Ok(msg) => msg,
             Err(e) => return Err(e)
         };
-        let len = encoded_message.len() + LENGTH_MARKER_SIZE;
 
+        let len = encoded_message.len();
         let u32_len = u32::try_from(len).expect("large messages should have been handled by this point");
 
-        dst.reserve(len);
+        dst.reserve(len + LENGTH_MARKER_SIZE);
         dst.put_u32(u32_len);
         dst.put_slice(&encoded_message);
 
@@ -58,21 +59,23 @@ impl Decoder for MessageCodec {
             ));
         }
 
-        if src.len() < length {
-            src.reserve(length - src.len());
+        let full_length = length + LENGTH_MARKER_SIZE;
+
+        if src.len() < full_length {
+            src.reserve(full_length - src.len());
 
             return Ok(None);
         }
 
-        src.advance(length);
+        src.advance(full_length);
 
-        decode_message(src, length)
+        decode_message(src, full_length)
     }
 }
 
 fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage>, std::io::Error> {
 
-    let mut data = &mut src[LENGTH_MARKER_SIZE..length - 1];
+    let mut data = &mut src[LENGTH_MARKER_SIZE..length];
 
     let result = match serde_json::from_slice(&mut data) {
         Ok(tcp_message) => {
