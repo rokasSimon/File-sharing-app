@@ -48,7 +48,7 @@ impl Decoder for MessageCodec {
             return Ok(None);
         }
 
-        let mut length_bytes = [0; LENGTH_MARKER_SIZE];
+        let mut length_bytes = [0u8; LENGTH_MARKER_SIZE];
         length_bytes.copy_from_slice(&src[..LENGTH_MARKER_SIZE]);
         let length = u32::from_be_bytes(length_bytes) as usize;
 
@@ -60,28 +60,26 @@ impl Decoder for MessageCodec {
         }
 
         let full_length = length + LENGTH_MARKER_SIZE;
-
         if src.len() < full_length {
             src.reserve(full_length - src.len());
 
             return Ok(None);
         }
 
+        let data = src[LENGTH_MARKER_SIZE..full_length].to_vec();
         src.advance(full_length);
 
         info!("buf length = {}", src.len());
 
-        decode_message(src, full_length)
+        decode_message(data)
     }
 }
 
-fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage>, std::io::Error> {
+fn decode_message(src: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
 
     info!("buf length = {}", src.len());
 
-    let mut data = &mut src[LENGTH_MARKER_SIZE..length];
-
-    let result = match serde_json::from_slice(&mut data) {
+    let result = match serde_json::from_slice(&src) {
         Ok(tcp_message) => {
             info!("decoded {:?}", tcp_message);
 
