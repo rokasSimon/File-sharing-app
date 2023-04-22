@@ -1,2 +1,2 @@
-$Env:RUST_LOG="warn";
+$Env:RUST_LOG="info,mdns_sd=error";
 npx tauri dev

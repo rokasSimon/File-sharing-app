@@ -76,7 +76,7 @@ fn decode_message(src: &mut BytesMut, length: usize) -> Result<Option<TcpMessage
 
     let result = match serde_json::from_slice(&mut data) {
         Ok(tcp_message) => {
-            debug!("decoded {:?}", tcp_message);
+            info!("decoded {:?}", tcp_message);
 
             Ok(Some(tcp_message))
         },

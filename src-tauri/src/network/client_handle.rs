@@ -55,7 +55,7 @@ pub async fn client_loop(mut client_data: ClientData) {
                                 },
 
                                 TcpMessage::SendPeerId(id) => {
-                                    warn!("Received {} peer id", &id);
+                                    info!("Received {} peer id", &id);
 
                                     client_peer_id = Some(id);
                                     let _ = client_data.server.channel.send(MessageToServer::SetPeerId(client_data.addr, client_peer_id.unwrap())).await;

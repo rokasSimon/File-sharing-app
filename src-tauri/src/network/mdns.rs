@@ -92,14 +92,14 @@ pub async fn start_mdns(
                     MessageToMdns::RemoveService(service_to_remove) => {
                         if let Some(mut service) = resolved_services.get_mut(service_to_remove.get_fullname()) {
                             let current_time = Utc::now();
-                            warn!("Disconnecting service at {}", current_time);
+                            info!("Disconnecting service at {}", current_time);
                             service.status = ServiceStatus::Disconnected(current_time);
                         }
                     }
 
                     MessageToMdns::ConnectedService(service_connected) => {
                         if let Some(mut service) = resolved_services.get_mut(service_connected.get_fullname()) {
-                            warn!("Connected service {}", service_connected.get_fullname());
+                            info!("Connected service {}", service_connected.get_fullname());
                             service.status = ServiceStatus::Connected;
                         }
                     }
@@ -109,7 +109,7 @@ pub async fn start_mdns(
                 let res = mdns.register(service_info.clone());
 
                 match res {
-                    Ok(()) => warn!("Registered info again"),
+                    Ok(()) => info!("Registered service"),
                     Err(e) => error!("{}", e)
                 };
 
@@ -134,10 +134,10 @@ pub async fn start_mdns(
 async fn handle_mdns_event(event: &ServiceEvent, server_handle: &ServerHandle, my_hostname: &str) {
     match event {
         ServiceEvent::ServiceResolved(service) => {
-            warn!("Resolved service {:?}", service);
+            info!("Resolved service {:?}", service);
 
             if service.get_hostname() != my_hostname {
-                warn!("Adding service: {:?}", service);
+                info!("Adding service: {:?}", service);
 
                 let _ = server_handle.channel.send(MessageToServer::ServiceFound(service.clone())).await;
             }
