@@ -4,7 +4,7 @@
   height: 100%;
 }
 
-nav {
+.window-nav {
   --top-margin: 0.25em;
 
   display: flex;

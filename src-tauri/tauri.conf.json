@@ -44,6 +44,14 @@
         "startDragging": true,
         "unmaximize": true,
         "unminimize": true
+      },
+      "dialog": {
+        "all": false,
+        "ask": false,
+        "confirm": false,
+        "message": false,
+        "open": true,
+        "save": true
       }
     },
     "bundle": {

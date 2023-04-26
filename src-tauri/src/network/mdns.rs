@@ -1,17 +1,13 @@
 use std::{
     collections::HashMap,
-    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
 
 use anyhow::Result;
-use chrono::{DateTime, Local, NaiveTime, Utc};
-use if_addrs::{IfAddr, Ifv4Addr};
+use chrono::{DateTime, Utc};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
-use tokio::{
-    net::TcpStream,
-    sync::{mpsc, oneshot},
-};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::peer_id::PeerId;
 
@@ -22,6 +18,7 @@ pub const MDNS_UPDATE_TIME: u64 = 120;
 
 const MDNS_PORT: u16 = 61000;
 
+#[derive(Debug)]
 pub enum MessageToMdns {
     RemoveService(ServiceInfo),
     ConnectedService(ServiceInfo),

@@ -4,7 +4,8 @@
   --window-titlebar-bg: #2a2a2b;
   --window-titlebar-border: #2a2a2b;
   --window-bg: #2e2e35;
-  --window-content-border: #5e5c5c;
+  --window-content-border: rgba(255, 255, 255, 0.12);
+  --window-content-border-darker: rgba(255, 255, 255, 0.25);
   --warning-color: #b91f1f;
 
   --titlebar-height: 40px;
@@ -14,8 +15,6 @@
 
 html, body, #root {
   height: 100%;
-  background-color: var(--window-bg);
-  color: var(--light-text);
 }
 
 body {

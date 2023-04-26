@@ -1,26 +1,41 @@
 use std::{
     collections::HashMap,
-    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
+    net::{IpAddr, SocketAddr, SocketAddrV4},
+    path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
 
+use anyhow::{anyhow, bail, Result};
+use chrono::{DateTime, Utc};
+use cryptohelpers::crc::compute_stream;
 use mdns_sd::ServiceInfo;
-use tauri::async_runtime::Receiver;
+use serde::{Deserialize, Serialize};
+use tauri::{Manager, AppHandle};
 use tokio::{
     net::TcpStream,
-    sync::mpsc::{self, Sender},
+    sync::{
+        broadcast,
+        mpsc::{self, Sender},
+    },
 };
+use uuid::Uuid;
 
-use crate::{config::StoredConfig, peer_id::PeerId};
+use crate::{
+    config::StoredConfig,
+    data::{ContentLocation, ShareDirectory, ShareDirectorySignature, SharedFile},
+    peer_id::PeerId
+};
 
 use super::{
     client_handle::{client_loop, ClientData, ClientHandle, MessageFromServer},
-    mdns::MessageToMdns,
+    mdns::MessageToMdns
 };
 
 const CHANNEL_SIZE: usize = 64;
 const UPDATE_PERIOD: u64 = 10;
+const MAIN_WINDOW_LABEL: &str = "main";
 
 #[derive(Clone)]
 pub struct ServerHandle {
@@ -36,45 +51,69 @@ pub enum MessageToServer {
     ServiceFound(ServiceInfo),
     ConnectionAccepted(TcpStream, SocketAddr),
     KillClient(ClientConnectionId),
+    NewShareDirectory(ShareDirectorySignature),
 }
 
 struct ServerData<'a> {
-    //recv: &'a mut Receiver<MessageToServer>,
+    window_manager: &'a AppHandle,
     server_handle: &'a ServerHandle,
     clients: &'a mut HashMap<ClientConnectionId, ClientHandle>,
     mdns_sender: &'a mpsc::Sender<MessageToMdns>,
+    broadcast_sender: &'a broadcast::Sender<MessageFromServer>,
 }
 
-impl ServerHandle {}
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all="camelCase")]
+pub enum WindowRequest {
+    CreateShareDirectory(String),
+    GetAllShareDirectoryData(bool),
+    AddFiles { directory_identifier: String, file_paths: Vec<String> },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all="camelCase")]
+pub struct AddedFiles {
+    pub directory_identifier: Uuid,
+    pub shared_files: Vec<SharedFile>
+}
 
 pub async fn server_loop(
-    mut recv: Receiver<MessageToServer>,
+    window_manager: AppHandle,
+    mut client_receiver: mpsc::Receiver<MessageToServer>,
+    mut window_receiver: mpsc::Receiver<WindowRequest>,
     mdns_sender: mpsc::Sender<MessageToMdns>,
     server_handle: ServerHandle,
 ) {
+    let (broadcast_sender, mut _broadcast_receiver) =
+        broadcast::channel::<MessageFromServer>(CHANNEL_SIZE);
     let mut clients: HashMap<ClientConnectionId, ClientHandle> = HashMap::new();
     let mut interval = tokio::time::interval(Duration::from_secs(UPDATE_PERIOD));
 
     loop {
-        tokio::select! {
-            Some(msg) = recv.recv() => {
-                let server_data = ServerData {
-                    //recv: &mut recv,
-                    server_handle: &server_handle,
-                    clients: &mut clients,
-                    mdns_sender: &mdns_sender
-                };
+        let server_data = ServerData {
+            window_manager: &window_manager,
+            server_handle: &server_handle,
+            clients: &mut clients,
+            mdns_sender: &mdns_sender,
+            broadcast_sender: &broadcast_sender,
+        };
 
-                handle_message(msg, server_data).await;
+        tokio::select! {
+            Some(msg) = client_receiver.recv() => {
+                let result = handle_message(msg, server_data).await;
+
+                if let Err(e) = result {
+                    error!("{}", e);
+                }
+            }
+            Some(request) = window_receiver.recv() => {
+                let result = handle_request(request, server_data).await;
+
+                if let Err(e) = result {
+                    error!("{}", e);
+                }
             }
             _ = interval.tick() => {
-                let server_data = ServerData {
-                    //recv: &mut recv,
-                    server_handle: &server_handle,
-                    clients: &mut clients,
-                    mdns_sender: &mdns_sender
-                };
-
                 do_periodic_work(server_data).await;
             }
         }
@@ -85,8 +124,6 @@ async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
     let mut cliends_to_remove = vec![];
 
     for (key, value) in &*server_data.clients {
-        info!("Iterating over client {} | {:?}", key, value.service_info);
-
         if value.id.is_none() {
             let send_result = value
                 .passive_sender
@@ -113,7 +150,7 @@ async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
     }
 }
 
-async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a>) {
+async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a>) -> Result<()> {
     match msg {
         MessageToServer::ServiceFound(service) => {
             let ip_addr = service.get_addresses().iter().next();
@@ -125,46 +162,41 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                     let port = match port {
                         Some(p) => p,
-                        None => return,
+                        None => bail!("No port property found")
                     };
 
-                    let port: u16 = match port.parse() {
-                        Ok(p) => p,
-                        Err(_) => return,
-                    };
+                    let port: u16 = port.parse()?;
 
                     let ip_addr = IpAddr::V4(*ip);
                     let socket_addr = SocketAddrV4::new(*ip, port);
                     let socket_addr = SocketAddr::V4(socket_addr);
 
                     if !server_data.clients.contains_key(&ip_addr) {
-                        let connection_result = TcpStream::connect(socket_addr).await;
+                        let tcp_stream = TcpStream::connect(socket_addr).await?;
 
-                        match connection_result {
-                            Ok(tcp_stream) => {
-                                add_client(
-                                    &mut server_data.clients,
-                                    tcp_stream,
-                                    ip_addr,
-                                    &server_data.server_handle,
-                                    Some(service.clone()),
-                                )
-                                .await;
+                        add_client(
+                            &mut server_data,
+                            tcp_stream,
+                            ip_addr,
+                            Some(service.clone()),
+                        )
+                        .await;
 
-                                if server_data.clients.contains_key(&ip_addr) {
-                                    let _ = server_data
-                                        .mdns_sender
-                                        .send(MessageToMdns::ConnectedService(service))
-                                        .await;
-                                }
-                            }
-                            Err(e) => error!("{}", e),
+                        if server_data.clients.contains_key(&ip_addr) {
+                            let _ = server_data
+                                .mdns_sender
+                                .send(MessageToMdns::ConnectedService(service))
+                                .await?;
+
+                            return Ok(());
                         }
+
+                        Err(anyhow!("Client already connected: {}", socket_addr))
                     } else {
-                        warn!("Client already connected: {}", socket_addr);
+                        Err(anyhow!("Client already connected: {}", socket_addr))
                     }
                 }
-                None => error!("Service had no associated IP addresses"),
+                None => Err(anyhow!("Service had no associated IP addresses"))
             }
         }
 
@@ -172,16 +204,11 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             let ip_addr = addr.ip();
 
             if !server_data.clients.contains_key(&ip_addr) {
-                add_client(
-                    &mut server_data.clients,
-                    tcp,
-                    ip_addr,
-                    &server_data.server_handle,
-                    None,
-                )
-                .await;
+                let _ = add_client(&mut server_data, tcp, ip_addr, None).await;
+
+                Ok(())
             } else {
-                warn!("Client already connected: {}", addr);
+                Err(anyhow!("Client already connected: {}", addr))
             }
         }
 
@@ -191,9 +218,11 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             match client {
                 Some(client) => {
                     client.id = Some(id);
+
+                    Ok(())
                 }
                 None => {
-                    error!("No such client for {}", addr);
+                    Err(anyhow!("No such client for {}", addr))
                 }
             }
         }
@@ -204,24 +233,113 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             match client {
                 Some(client) => {
                     disconnected_client(client, server_data.mdns_sender).await;
-                },
+
+                    Ok(())
+                }
                 None => {
-                    error!("No such client to drop: {}", client_addr);
+                    Err(anyhow!("No such client to drop: {}", client_addr))
                 }
             }
         }
 
+        MessageToServer::NewShareDirectory(directory) => {
+            let mut config = server_data.server_handle.config.cached_data.lock().await;
+
+            let new_dir = ShareDirectory {
+                signature: directory.clone(),
+                shared_files: HashMap::new(),
+            };
+
+            config.insert(new_dir.signature.identifier, new_dir);
+
+            let s = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, "NewShareDirectory", directory)?;
+            
+            Ok(())
+        }
+
         _ => {
-            info!("Something was sent to server handle");
+            Err(anyhow!("Unhandled message to server"))
         }
     }
 }
 
-async fn add_client(
-    clients: &mut HashMap<ClientConnectionId, ClientHandle>,
+async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>) -> Result<()> {
+    match msg {
+
+        WindowRequest::CreateShareDirectory(name) => {
+            let mut data = server_data.server_handle.config.cached_data.lock().await;
+
+            let id = Uuid::new_v4();
+            let signature = ShareDirectorySignature {
+                name,
+                identifier: id,
+                last_transaction_id: id,
+            };
+            let sd = ShareDirectory {
+                signature: signature.clone(),
+                shared_files: HashMap::new(),
+            };
+
+            data.insert(id, sd);
+            let _ = server_data
+                .broadcast_sender
+                .send(MessageFromServer::NotifyNewDirectory(signature.clone()))?;
+            let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, "NewShareDirectory", signature);
+
+            Ok(())
+        }
+
+        WindowRequest::GetAllShareDirectoryData(shouldGetAllData) => {
+            let data = server_data.server_handle.config.cached_data.lock().await;
+
+            let values: Vec<ShareDirectory> = data.values().cloned().collect();
+
+            let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, "UpdateShareDirectories", values);
+
+            Ok(())
+        }
+
+        WindowRequest::AddFiles{ file_paths, directory_identifier } => {
+            let mut directories = server_data.server_handle.config.cached_data.lock().await;
+            let id = Uuid::from_str(&directory_identifier)?;
+            let directory = directories.get_mut(&id);
+
+            if let Some(dir) = directory {
+                let mut shared_files = vec![];
+                for file_path in file_paths {
+                    let shared_file = create_shared_file(
+                        file_path,
+                        &server_data.server_handle.peer_id,
+                    )
+                    .await?;
+    
+                    shared_files.push(shared_file);
+                }
+
+                let payload = AddedFiles {
+                    directory_identifier: dir.signature.identifier,
+                    shared_files: shared_files.clone(),
+                };
+
+                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, "AddedFiles", payload)?;
+
+                for sf in shared_files {
+                    dir.shared_files.insert(sf.identifier, sf);
+                }
+
+                return Ok(());
+            }
+
+            Err(anyhow!("Directory not found"))
+        }
+
+    }
+}
+
+async fn add_client<'a>(
+    server_data: &mut ServerData<'a>,
     tcp: TcpStream,
     addr: ClientConnectionId,
-    server: &ServerHandle,
     service_info: Option<ServiceInfo>,
 ) {
     info!("Adding client with address {}", addr);
@@ -230,14 +348,14 @@ async fn add_client(
     let (active_sender, active_receiver) = mpsc::channel(CHANNEL_SIZE);
 
     let client_data = ClientData {
-        server: server.clone(),
-        stream: tcp,
+        server: server_data.server_handle.clone(),
+        broadcast_receiver: server_data.broadcast_sender.subscribe(),
         passive_receiver,
         active_receiver,
         addr,
     };
 
-    let join = tauri::async_runtime::spawn(client_loop(client_data));
+    let join = tauri::async_runtime::spawn(client_loop(client_data, tcp));
 
     let client = ClientHandle {
         id: None,
@@ -247,7 +365,7 @@ async fn add_client(
         service_info,
     };
 
-    let _ = clients.insert(addr, client);
+    let _ = server_data.clients.insert(addr, client);
 }
 
 async fn disconnected_client<'a>(client: ClientHandle, mdns_sender: &mpsc::Sender<MessageToMdns>) {
@@ -258,4 +376,33 @@ async fn disconnected_client<'a>(client: ClientHandle, mdns_sender: &mpsc::Sende
             .send(MessageToMdns::RemoveService(service))
             .await;
     }
+}
+
+async fn create_shared_file(file_path: String, this_peer: &PeerId) -> Result<SharedFile> {
+    let path = PathBuf::from_str(&file_path)?;
+
+    let mut file = tokio::fs::File::open(&path).await?;
+    let metadata = file.metadata().await?;
+    let checksum = compute_stream(&mut file).await?;
+
+    let identifier = Uuid::new_v4();
+    let name = match path.file_name() {
+        Some(name) => match name.to_str() {
+            Some(os_name) => os_name.to_string(),
+            None => bail!("Invalid file path: {:?}", path),
+        },
+        None => bail!("Invalid file path: {:?}", path),
+    };
+    let now = Utc::now();
+    let size = metadata.len();
+
+    Ok(SharedFile {
+        name,
+        identifier,
+        content_hash: checksum,
+        last_modified: now,
+        content_location: ContentLocation::LocalPath(path),
+        owned_peers: vec![this_peer.clone()],
+        size,
+    })
 }

@@ -3,8 +3,7 @@
     flex-direction: row;
     width: 100%;
     height: 100%;
-
-    border: 1px solid var(--window-content-border);
+    margin-bottom: 4em;
   }
   
   .app-sidebar {
@@ -20,6 +19,7 @@
     flex-direction: column;
     width: 100%;
     height: 100%;
+    overflow-y: auto;
   }
   
   .app-sidebar .app-sidebar-content {

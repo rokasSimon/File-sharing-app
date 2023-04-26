@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use tokio_util::codec::{Encoder, Decoder};
 use bytes::{BytesMut, BufMut, Buf};
 
-use crate::peer_id::PeerId;
+use crate::{peer_id::PeerId, data::ShareDirectorySignature};
 
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 4; // 4 MB
 const LENGTH_MARKER_SIZE: usize = 4;
@@ -12,6 +12,9 @@ const LENGTH_MARKER_SIZE: usize = 4;
 pub enum TcpMessage {
     RequestPeerId,
     SendPeerId(PeerId),
+
+    NewShareDirectory(ShareDirectorySignature),
+
     Part(u8, Vec<u8>)
 }
 
@@ -69,15 +72,11 @@ impl Decoder for MessageCodec {
         let data = src[LENGTH_MARKER_SIZE..full_length].to_vec();
         src.advance(full_length);
 
-        info!("buf length = {}", src.len());
-
         decode_message(data)
     }
 }
 
 fn decode_message(src: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
-
-    info!("buf length = {}", src.len());
 
     let result = match serde_json::from_slice(&src) {
         Ok(tcp_message) => {

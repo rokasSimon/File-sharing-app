@@ -1,0 +1,17 @@
+"filename", "language", "JSON", "TypeScript JSX", "CSS", "Rust", "TOML", "comment", "blank", "total"
+"e:\DEV\Rust\file-sharing-app\package-lock.json", "JSON", 29, 0, 0, 0, 0, 0, 0, 29
+"e:\DEV\Rust\file-sharing-app\package.json", "JSON", 2, 0, 0, 0, 0, 0, 0, 2
+"e:\DEV\Rust\file-sharing-app\src-tauri\Cargo.toml", "TOML", 0, 0, 0, 0, 1, 0, 0, 1
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\data.rs", "Rust", 0, 0, 0, 2, 0, 0, 0, 2
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\main.rs", "Rust", 0, 0, 0, -3, 0, 0, 0, -3
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network.rs", "Rust", 0, 0, 0, -1, 0, -5, -1, -7
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\mdns.rs", "Rust", 0, 0, 0, -3, 0, 0, 0, -3
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server_handle.rs", "Rust", 0, 0, 0, 79, 0, 0, 22, 101
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\window.rs", "Rust", 0, 0, 0, -50, 0, 42, -2, -10
+"e:\DEV\Rust\file-sharing-app\src-tauri\tauri.conf.json", "JSON", 8, 0, 0, 0, 0, 0, 0, 8
+"e:\DEV\Rust\file-sharing-app\src\Components\DirectoryDetails.tsx", "TypeScript JSX", 0, 50, 0, 0, 0, 0, 9, 59
+"e:\DEV\Rust\file-sharing-app\src\RustCommands\ShareDirectoryContext.tsx", "TypeScript JSX", 0, 46, 0, 0, 0, 12, 10, 68
+"e:\DEV\Rust\file-sharing-app\src\RustCommands\networkCommands.tsx", "TypeScript JSX", 0, 6, 0, 0, 0, 0, 1, 7
+"e:\DEV\Rust\file-sharing-app\src\pages\Directories.css", "CSS", 0, 0, 2, 0, 0, 0, 0, 2
+"e:\DEV\Rust\file-sharing-app\src\pages\Directories.tsx", "TypeScript JSX", 0, 22, 0, 0, 0, 0, 3, 25
+"Total", "-", 39, 124, 2, 24, 1, 49, 42, 281

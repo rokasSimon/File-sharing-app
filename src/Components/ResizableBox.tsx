@@ -2,7 +2,7 @@ import React from "react";
 
 import './ResizableBox.css';
 
-function ResizableBox(props: { leftContainer: JSX.Element, rightContainer: JSX.Element, minWidth: number | string, maxWidth: number | string }) {
+function ResizableBox(props: { leftContainer: JSX.Element, rightContainer: JSX.Element | null, minWidth: number | string, maxWidth: number | string }) {
     const sidebarRef = React.useRef<HTMLDivElement>(null);
     const [isResizing, setIsResizing] = React.useState(false);
     const [sidebarWidth, setSidebarWidth] = React.useState(250);
