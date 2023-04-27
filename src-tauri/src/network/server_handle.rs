@@ -147,7 +147,7 @@ async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
 
     for (key, value) in server_data.clients.iter_mut() {
         if !value.job_queue.is_empty() {
-            let next_job = value.job_queue.pop_back();
+            let next_job = value.job_queue.pop_front();
 
             if let Some(job) = next_job {
                 let send_result = value.passive_sender.send(job).await;
