@@ -145,6 +145,10 @@ async fn handle_mdns_event(
         ServiceEvent::ServiceResolved(service) => {
             info!("Resolved service {:?}", service);
 
+            if service.get_fullname() == my_hostname {
+                return;
+            }
+
             let existing_service = resolved_services.get(service.get_fullname());
             match existing_service {
                 Some(service) => return,
