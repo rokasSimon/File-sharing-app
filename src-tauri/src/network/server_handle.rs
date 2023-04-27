@@ -12,12 +12,16 @@ use chrono::{DateTime, Utc};
 use cryptohelpers::crc::compute_stream;
 use mdns_sd::ServiceInfo;
 use serde::{Deserialize, Serialize};
-use tauri::{async_runtime::{JoinHandle, Mutex}, AppHandle, Manager};
+use tauri::{
+    async_runtime::{JoinHandle, Mutex},
+    AppHandle, Manager,
+};
 use tokio::{
     net::TcpStream,
     sync::{
         broadcast,
-        mpsc::{self, Sender}, MutexGuard,
+        mpsc::{self, Sender},
+        MutexGuard,
     },
 };
 use uuid::Uuid;
@@ -198,19 +202,21 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                     if !clients.contains_key(&ip_addr) {
                         let tcp_stream = TcpStream::connect(socket_addr).await?;
 
-                        add_client(server_data.server_handle.clone(), &mut clients, tcp_stream, ip_addr, Some(service.clone()))
+                        add_client(
+                            server_data.server_handle.clone(),
+                            &mut clients,
+                            tcp_stream,
+                            ip_addr,
+                            Some(service.clone()),
+                        )
+                        .await?;
+
+                        let _ = server_data
+                            .mdns_sender
+                            .send(MessageToMdns::ConnectedService(service))
                             .await?;
 
-                        if clients.contains_key(&ip_addr) {
-                            let _ = server_data
-                                .mdns_sender
-                                .send(MessageToMdns::ConnectedService(service))
-                                .await?;
-
-                            return Ok(());
-                        }
-
-                        Err(anyhow!("Client added, but map does not contain client"))
+                        return Ok(());
                     } else {
                         Err(anyhow!("Service client already connected: {}", socket_addr))
                     }
@@ -224,7 +230,14 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             let mut clients = server_data.clients.lock().await;
 
             if !clients.contains_key(&ip_addr) {
-                add_client(server_data.server_handle.clone(), &mut clients, tcp, ip_addr, None).await
+                add_client(
+                    server_data.server_handle.clone(),
+                    &mut clients,
+                    tcp,
+                    ip_addr,
+                    None,
+                )
+                .await
             } else {
                 Err(anyhow!("TCP accepted client already connected: {}", addr))
             }
@@ -278,12 +291,10 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             let mut owned_dirs = server_data.server_handle.config.cached_data.lock().await;
             let mut clients = server_data.clients.lock().await;
 
-            let client = clients
-                .iter_mut()
-                .find(|(_, cdata)| match &cdata.id {
-                    Some(pid) => pid == &peer,
-                    None => false,
-                });
+            let client = clients.iter_mut().find(|(_, cdata)| match &cdata.id {
+                Some(pid) => pid == &peer,
+                None => false,
+            });
 
             match client {
                 Some((_, c)) => {
@@ -485,14 +496,7 @@ async fn add_client<'a>(
         job_queue,
     };
 
-    //let mut clients = server_data.clients.lock().await;
     let _ = clients.insert(addr, client);
-
-    // if pid.is_none() {
-    //     passive_sender.send(MessageFromServer::GetPeerId).await?;
-    // } else {
-    //     passive_sender.send(MessageFromServer::Synchronize).await?;
-    // }
 
     Ok(())
 }
