@@ -28,11 +28,13 @@ interface ShareDirectoryToPeers extends BackendCommand {
 }
 
 interface DownloadFile extends BackendCommand {
-    fileIdentifier: string
+    directoryIdentifier: string;
+    fileIdentifier: string;
 }
 
 interface DeleteFile extends BackendCommand {
-    fileIdentifier: string
+    directoryIdentifier: string;
+    fileIdentifier: string;
 }
 
 async function invokeBackendCommand(command: BackendCommand): Promise<any> {

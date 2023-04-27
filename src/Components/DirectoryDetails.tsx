@@ -97,7 +97,8 @@ function DirectoryDetails({
     if (!file) return;
 
     const request: DownloadFile = {
-      fileIdentifier: fileId
+      fileIdentifier: fileId,
+      directoryIdentifier
     };
 
     
@@ -109,7 +110,8 @@ function DirectoryDetails({
     if (!file) return;
 
     const request: DeleteFile = {
-      fileIdentifier: fileId
+      fileIdentifier: fileId,
+      directoryIdentifier
     };
 
     invokeNetworkCommand(request).then((value) => {
