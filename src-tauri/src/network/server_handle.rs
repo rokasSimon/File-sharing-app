@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use cryptohelpers::crc::compute_stream;
 use mdns_sd::ServiceInfo;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager};
+use tauri::{async_runtime::JoinHandle, AppHandle, Manager};
 use tokio::{
     net::TcpStream,
     sync::{
@@ -29,12 +29,12 @@ use crate::{
 };
 
 use super::{
-    client_handle::{client_loop, ClientData, ClientHandle, MessageFromServer},
+    client_handle::{client_loop, ClientData, MessageFromServer},
     mdns::MessageToMdns,
 };
 
-const CHANNEL_SIZE: usize = 64;
-const UPDATE_PERIOD: u64 = 10;
+const CHANNEL_SIZE: usize = 16;
+const UPDATE_PERIOD: u64 = 5;
 const MAIN_WINDOW_LABEL: &str = "main";
 
 #[derive(Clone)]
@@ -44,13 +44,21 @@ pub struct ServerHandle {
     pub peer_id: PeerId,
 }
 
+pub struct ClientHandle {
+    pub id: Option<PeerId>,
+    pub passive_sender: mpsc::Sender<MessageFromServer>,
+    pub active_sender: mpsc::Sender<MessageFromServer>,
+    pub join: JoinHandle<()>,
+    pub service_info: Option<ServiceInfo>,
+    pub job_queue: VecDeque<MessageFromServer>,
+}
+
 pub type ClientConnectionId = IpAddr;
 
 #[derive(Debug)]
 pub enum MessageToServer {
     SetPeerId(ClientConnectionId, PeerId),
     //ReceivedSignatures(Vec<ShareDirectorySignature>),
-
     ServiceFound(ServiceInfo),
     ConnectionAccepted(TcpStream, SocketAddr),
     KillClient(ClientConnectionId),
@@ -135,37 +143,27 @@ pub async fn server_loop(
 }
 
 async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
-    let mut cliends_to_remove = vec![];
+    let mut clients_to_remove = vec![];
 
-    for (key, value) in &*server_data.clients {
-        if value.id.is_none() {
-            let send_result = value
-                .passive_sender
-                .send(MessageFromServer::GetPeerId)
-                .await;
+    for (key, value) in server_data.clients.iter_mut() {
+        if !value.job_queue.is_empty() {
+            let next_job = value.job_queue.pop_back();
 
-            if let Err(e) = send_result {
-                error!(
+            if let Some(job) = next_job {
+                let send_result = value.passive_sender.send(job).await;
+
+                if let Err(e) = send_result {
+                    error!(
                     "Could not send value to client {} because {}. Client will be disconnected.",
                     key, e
                 );
-                cliends_to_remove.push(key.to_owned());
-            }
-        }
-
-        if !value.is_synchronised {
-            let send_result = value
-                .passive_sender
-                .send(MessageFromServer::Synchronize)
-                .await;
-
-            if let Err(e) = send_result {
-                error!("Could not send value to client {} because {}. Client will be disconnected.", key, e);
+                    clients_to_remove.push(key.to_owned());
+                }
             }
         }
     }
 
-    for client_key in cliends_to_remove.iter() {
+    for client_key in clients_to_remove.iter() {
         let removed = server_data.clients.remove(client_key);
 
         match removed {
@@ -237,7 +235,10 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                 Some(client) => {
                     client.id = Some(id);
 
-                    let _ = client.passive_sender.send(MessageFromServer::Synchronize).await?;
+                    let _ = client
+                        .passive_sender
+                        .send(MessageFromServer::Synchronize)
+                        .await?;
 
                     Ok(())
                 }
@@ -272,18 +273,19 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
         MessageToServer::SynchronizeDirectories(directories, peer) => {
             let mut owned_dirs = server_data.server_handle.config.cached_data.lock().await;
-            let client = server_data.clients.iter_mut().find(|(_, cdata)| {
-                match &cdata.id {
+            let client = server_data
+                .clients
+                .iter_mut()
+                .find(|(_, cdata)| match &cdata.id {
                     Some(pid) => pid == &peer,
-                    None => false
-                }
-            });
+                    None => false,
+                });
 
             match client {
-                Some((_, mut c)) => {
+                Some((_, c)) => {
                     for dir in directories {
                         let od = owned_dirs.get_mut(&dir.signature.identifier);
-        
+
                         match od {
                             Some(matched_dir) => {
                                 for pid in dir.signature.shared_peers {
@@ -291,34 +293,37 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                                         matched_dir.signature.shared_peers.push(pid);
                                     }
                                 }
-        
-                                if dir.signature.last_modified > matched_dir.signature.last_modified {
+
+                                if dir.signature.last_modified > matched_dir.signature.last_modified
+                                {
                                     for (id, file) in dir.shared_files {
                                         if !matched_dir.shared_files.contains_key(&id) {
                                             matched_dir.shared_files.insert(id, file);
                                         }
                                     }
-        
-                                    matched_dir.signature.last_modified = dir.signature.last_modified;
+
+                                    matched_dir.signature.last_modified =
+                                        dir.signature.last_modified;
                                 }
-                            },
+                            }
                             None => {
                                 owned_dirs.insert(dir.signature.identifier, dir);
                             }
                         }
                     }
-        
+
                     let _ = server_data.window_manager.emit_to(
                         MAIN_WINDOW_LABEL,
                         "UpdateShareDirectories",
-                        owned_dirs.values().cloned().collect::<Vec<ShareDirectory>>(),
+                        owned_dirs
+                            .values()
+                            .cloned()
+                            .collect::<Vec<ShareDirectory>>(),
                     )?;
 
-                    c.is_synchronised = true;
-        
                     Ok(())
-                },
-                None => Err(anyhow!("No client found"))
+                }
+                None => Err(anyhow!("No client found")),
             }
         }
     }
@@ -351,7 +356,7 @@ async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>)
             Ok(())
         }
 
-        WindowRequest::GetAllShareDirectoryData(shouldGetAllData) => {
+        WindowRequest::GetAllShareDirectoryData(_) => {
             let data = server_data.server_handle.config.cached_data.lock().await;
 
             let values: Vec<ShareDirectory> = data.values().cloned().collect();
@@ -416,7 +421,9 @@ async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>)
                 for (_, cval) in server_data.clients {
                     if let Some(pid) = &cval.id {
                         if dir.signature.shared_peers.contains(&pid) {
-                            cval.passive_sender.send(MessageFromServer::SendDirectories(vec![dir.clone()])).await?
+                            cval.passive_sender
+                                .send(MessageFromServer::SendDirectories(vec![dir.clone()]))
+                                .await?
                         }
                     }
                 }
@@ -453,11 +460,15 @@ async fn add_client<'a>(
             let name = service.get_fullname();
 
             PeerId::parse(name)
-        },
-        None => None
+        }
+        None => None,
     };
 
     let join = tauri::async_runtime::spawn(client_loop(client_data, tcp, pid.clone()));
+    let job_queue = VecDeque::from([
+        MessageFromServer::GetPeerId,
+        MessageFromServer::Synchronize
+    ]);
 
     let client = ClientHandle {
         id: pid.clone(),
@@ -465,16 +476,16 @@ async fn add_client<'a>(
         active_sender,
         join,
         service_info,
-        is_synchronised: false,
+        job_queue,
     };
 
     let _ = server_data.clients.insert(addr, client);
 
-    if pid.is_none() {
-        passive_sender.send(MessageFromServer::GetPeerId).await?;
-    } else {
-        passive_sender.send(MessageFromServer::Synchronize).await?;
-    }
+    // if pid.is_none() {
+    //     passive_sender.send(MessageFromServer::GetPeerId).await?;
+    // } else {
+    //     passive_sender.send(MessageFromServer::Synchronize).await?;
+    // }
 
     Ok(())
 }

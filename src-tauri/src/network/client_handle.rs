@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, HashSet}, net::IpAddr};
+use std::{collections::{HashMap, HashSet, VecDeque}, net::IpAddr};
 
 use anyhow::{anyhow, bail, Result};
 use futures::{SinkExt, StreamExt};
@@ -42,15 +42,6 @@ pub struct ClientData {
     pub active_receiver: mpsc::Receiver<MessageFromServer>,
     pub broadcast_receiver: broadcast::Receiver<MessageFromServer>,
     pub addr: ClientConnectionId,
-}
-
-pub struct ClientHandle {
-    pub id: Option<PeerId>,
-    pub passive_sender: mpsc::Sender<MessageFromServer>,
-    pub active_sender: mpsc::Sender<MessageFromServer>,
-    pub join: JoinHandle<()>,
-    pub service_info: Option<ServiceInfo>,
-    pub is_synchronised: bool,
 }
 
 struct ClientDataHandle<'a> {

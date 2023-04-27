@@ -100,10 +100,12 @@ pub async fn start_mdns(
 
                     MessageToMdns::ConnectedService(service_connected) => {
                         info!("Connected service {}", service_connected.get_fullname());
-                        resolved_services.insert(service_connected.get_fullname().to_owned(), ResolvedServiceInfo {
-                            service_info: service_connected,
-                            status: ServiceStatus::Connected
-                        });
+                        if let None = resolved_services.get(service_connected.get_fullname()) {
+                            resolved_services.insert(service_connected.get_fullname().to_owned(), ResolvedServiceInfo {
+                                service_info: service_connected,
+                                status: ServiceStatus::Connected
+                            });
+                        }
                     }
                 }
             }
