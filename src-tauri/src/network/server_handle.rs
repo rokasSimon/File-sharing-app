@@ -219,6 +219,11 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                         return Ok(());
                     } else {
+                        let _ = server_data
+                            .mdns_sender
+                            .send(MessageToMdns::ConnectedService(service))
+                            .await?;
+
                         Err(anyhow!("Service client already connected: {}", socket_addr))
                     }
                 }
@@ -238,7 +243,9 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                     ip_addr,
                     None,
                 )
-                .await
+                .await?;
+
+                Ok(())
             } else {
                 Err(anyhow!(
                     "TCP accepted client that is already connected: {}",
