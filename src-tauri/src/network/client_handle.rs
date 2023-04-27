@@ -27,7 +27,6 @@ use super::{
 #[derive(Clone, Debug)]
 pub enum MessageFromServer {
     GetPeerId,
-    //GetDirectorySignatures,
 
     Synchronize,
 
@@ -54,7 +53,6 @@ pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream, mut
 
     let mut framed_reader = FramedRead::new(read, MessageCodec {});
     let mut framed_writer = FramedWrite::new(write, MessageCodec {});
-    let mut unfinished_messages: HashMap<u8, Vec<TcpMessage>> = HashMap::new();
 
     let mut handle = ClientDataHandle {
         client_data: &mut client_data,
@@ -233,10 +231,6 @@ async fn handle_tcp_message<'a>(
             }
 
             Ok(())
-        }
-
-        TcpMessage::Part(_, _) => {
-            todo!("Probably unused");
         }
     }
 }

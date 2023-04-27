@@ -13,15 +13,10 @@ pub enum TcpMessage {
     RequestPeerId,
     SendPeerId(PeerId),
 
-    //RequestDirectorySignatures,
-    //SendDirectorySignatures(Vec<ShareDirectorySignature>),
-
     Synchronize,
     SendDirectories(Vec<ShareDirectory>),
 
     SharedDirectory(ShareDirectory),
-
-    Part(u8, Vec<u8>)
 }
 
 pub struct MessageCodec {
