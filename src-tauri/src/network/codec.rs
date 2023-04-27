@@ -3,7 +3,7 @@ use serde::{Serialize, Deserialize};
 use tokio_util::codec::{Encoder, Decoder};
 use bytes::{BytesMut, BufMut, Buf};
 
-use crate::{peer_id::PeerId, data::ShareDirectorySignature};
+use crate::{peer_id::PeerId, data::{ShareDirectorySignature, ShareDirectory}};
 
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 4; // 4 MB
 const LENGTH_MARKER_SIZE: usize = 4;
@@ -13,7 +13,13 @@ pub enum TcpMessage {
     RequestPeerId,
     SendPeerId(PeerId),
 
-    NewShareDirectory(ShareDirectorySignature),
+    //RequestDirectorySignatures,
+    //SendDirectorySignatures(Vec<ShareDirectorySignature>),
+
+    Synchronize,
+    SendDirectories(Vec<ShareDirectory>),
+
+    SharedDirectory(ShareDirectory),
 
     Part(u8, Vec<u8>)
 }

@@ -19,6 +19,7 @@ type ShareDirectorySignature = {
   name: string;
   identifier: string;
   lastTransactionId: string;
+  sharedPeers: Array<PeerId>;
 };
 
 type SharedFile = {
@@ -50,12 +51,15 @@ const ShareDirectoryContext =
 function ShareDirectoryProvider({ children }: any) {
   const [directories, setDirectories] = React.useState(initialState);
   const directoriesRef = React.useRef(directories);
+  const loaded = React.useRef(false);
 
   React.useEffect(() => {
     directoriesRef.current = directories;
   }, [directories]);
 
   React.useEffect(() => {
+    if (loaded.current) return;
+
     const startListenNewDir = async () => {
       const _ = await listen<ShareDirectorySignature>(
         "NewShareDirectory",
@@ -98,12 +102,10 @@ function ShareDirectoryProvider({ children }: any) {
           // }
 
           const dirs = input.map((dir) => {
-            console.log(`Iterating over ${dir.signature}`);
             const fileMap = new Map<string, SharedFile>();
 
             Object.keys(dir.shared_files).forEach((key) => {
               if (validateUuid(key)) {
-                console.log(`Iterating over ${key} with data ${JSON.stringify(dir.shared_files[key])}`);
                 fileMap.set(key, (dir.shared_files[key]) as SharedFile);
               }
             });
@@ -132,7 +134,9 @@ function ShareDirectoryProvider({ children }: any) {
         "AddedFiles",
         (event) => {
           const input = event.payload;
-          const directory = directories.find((dir) => {
+          const directory = directoriesRef.current.find((dir) => {
+            console.log(`${dir.signature.identifier} === ${input.directoryIdentifier}`);
+            
             return dir.signature.identifier === input.directoryIdentifier;
           });
 
@@ -142,7 +146,11 @@ function ShareDirectoryProvider({ children }: any) {
             }
           }
 
-          setDirectories(directories);
+          const dirs = [
+            ...directoriesRef.current
+          ];
+
+          setDirectories(dirs);
         }
       );
     };
@@ -160,6 +168,8 @@ function ShareDirectoryProvider({ children }: any) {
     startListenNewDir();
     startListenFileAdded();
     loadDirectories();
+
+    loaded.current = true;
   }, []);
 
   return (
@@ -170,4 +180,4 @@ function ShareDirectoryProvider({ children }: any) {
 }
 
 export { ShareDirectoryProvider, ShareDirectoryContext };
-export type { SharedFile, ShareDirectory, ShareDirectorySignature };
+export type { SharedFile, ShareDirectory, ShareDirectorySignature, PeerId };

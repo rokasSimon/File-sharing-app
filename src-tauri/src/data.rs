@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::{Path, PathBuf}};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -25,15 +28,16 @@ impl Clone for ShareDirectory {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct ShareDirectorySignature {
     pub name: String,
     pub identifier: Uuid,
-    pub last_transaction_id: Uuid,
+    pub last_modified: DateTime<Utc>,
+    pub shared_peers: Vec<PeerId>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub struct SharedFile {
     pub name: String,
     pub identifier: Uuid,
@@ -45,7 +49,7 @@ pub struct SharedFile {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all="camelCase")]
+#[serde(rename_all = "camelCase")]
 pub enum ContentLocation {
     LocalPath(PathBuf),
     NetworkOnly,

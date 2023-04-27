@@ -23,6 +23,7 @@ import {
   AddFiles,
   invokeNetworkCommand,
 } from "../RustCommands/networkCommands";
+import React from "react";
 
 type DirectoryDetailsProps = {
   files: Map<string, SharedFile>;

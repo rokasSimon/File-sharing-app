@@ -1,21 +1,26 @@
 import "./Directories.css";
 
+import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import ResizableBox from "../Components/ResizableBox";
 import React from "react";
 import Dialog from "@mui/material/Dialog";
 import {
+  Menu as MaterialMenu,
   Box,
   Button,
   DialogActions,
   DialogContent,
   DialogTitle,
+  IconButton,
   List,
+  ListItem,
   ListItemButton,
   ListItemText,
   ListSubheader,
   Paper,
   TextField,
   Typography,
+  MenuItem,
 } from "@mui/material";
 import {
   CreateShareDirectory,
@@ -35,6 +40,14 @@ function Directories() {
   >(undefined);
   const [shareCreationName, setShareCreationName] = React.useState("");
   const [shareCreationOpen, setShareCreationOpen] = React.useState(false);
+
+  const [optDirectory, setOptDirectory] = React.useState<
+    ShareDirectory | undefined
+  >(undefined);
+  const [optAnchorEl, setOptAnchorEl] = React.useState<null | HTMLElement>(
+    null
+  );
+  const optOpen = Boolean(optAnchorEl);
 
   const handleOpen = () => {
     setShareCreationName("");
@@ -71,6 +84,27 @@ function Directories() {
     setSelectedDirectory(directory);
   };
 
+  const handleDirectoryOptionsOpen = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    identifier: string
+  ) => {
+    const directory = shareDirectories.find((dir) => {
+      return dir.signature.identifier === identifier;
+    });
+
+    setOptDirectory(directory);
+    setOptAnchorEl(event.currentTarget);
+  };
+
+  const handleDirectoryOptionsClose = () => {
+    setOptDirectory(undefined);
+    setOptAnchorEl(null);
+  };
+
+  const handleShare = async () => {};
+
+  const handleRemove = async () => {};
+
   const duplicatedNames = new Map<string, number>();
   let directories = null;
   if (shareDirectories) {
@@ -84,23 +118,47 @@ function Directories() {
       }
 
       return (
-        <ListItemButton
-          style={{ maxHeight: "3em" }}
-          selected={
-            selectedDirectory?.signature?.identifier ===
-            val.signature.identifier
-          }
-          divider={true}
+        <ListItem
           key={val.signature.identifier}
-          onClick={() => handleListClick(val.signature.identifier)}
+          divider={true}
+          secondaryAction={
+            <IconButton
+              edge="end"
+              onClick={(event) =>
+                handleDirectoryOptionsOpen(event, val.signature.identifier)
+              }
+            >
+              <MoreHorizIcon />
+            </IconButton>
+          }
         >
-          <ListItemText>
-            {val.signature.name}
-            {usedCount && (
-              <Typography variant="caption" color="GrayText">{` (${usedCount})`}</Typography>
-            )}
-          </ListItemText>
-        </ListItemButton>
+          <ListItemButton
+            style={{ maxHeight: "3em" }}
+            // selected={
+            //   selectedDirectory?.signature?.identifier ===
+            //   val.signature.identifier
+            // }
+            onClick={() => handleListClick(val.signature.identifier)}
+          >
+            <ListItemText>
+              {val.signature.name}
+              {usedCount && (
+                <Typography
+                  variant="caption"
+                  color="GrayText"
+                >{` (${usedCount})`}</Typography>
+              )}
+            </ListItemText>
+            <MaterialMenu
+              anchorEl={optAnchorEl}
+              open={optOpen}
+              onClose={handleDirectoryOptionsClose}
+            >
+              <MenuItem onClick={handleRemove}>Remove</MenuItem>
+              <MenuItem onClick={handleShare}>Share</MenuItem>
+            </MaterialMenu>
+          </ListItemButton>
+        </ListItem>
       );
     });
   }

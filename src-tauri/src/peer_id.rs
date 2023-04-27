@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 const INSTANCE_SEPARATOR: &str = ";";
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct PeerId {
     hostname: String,
     uuid: Uuid

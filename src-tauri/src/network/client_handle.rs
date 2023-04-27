@@ -1,5 +1,6 @@
-use std::{collections::HashMap, net::IpAddr};
+use std::{collections::{HashMap, HashSet}, net::IpAddr};
 
+use anyhow::{anyhow, bail, Result};
 use futures::{SinkExt, StreamExt};
 use mdns_sd::ServiceInfo;
 use tauri::async_runtime::JoinHandle;
@@ -13,7 +14,9 @@ use tokio::{
 use tokio_util::codec::{FramedRead, FramedWrite};
 
 use crate::{
-    data::ShareDirectorySignature, network::server_handle::MessageToServer, peer_id::PeerId,
+    data::{ShareDirectory, ShareDirectorySignature},
+    network::server_handle::MessageToServer,
+    peer_id::PeerId,
 };
 
 use super::{
@@ -24,7 +27,13 @@ use super::{
 #[derive(Clone, Debug)]
 pub enum MessageFromServer {
     GetPeerId,
-    NotifyNewDirectory(ShareDirectorySignature),
+    //GetDirectorySignatures,
+
+    Synchronize,
+
+    SendDirectories(Vec<ShareDirectory>),
+
+    SharedDirectory(ShareDirectory),
 }
 
 pub struct ClientData {
@@ -41,6 +50,7 @@ pub struct ClientHandle {
     pub active_sender: mpsc::Sender<MessageFromServer>,
     pub join: JoinHandle<()>,
     pub service_info: Option<ServiceInfo>,
+    pub is_synchronised: bool,
 }
 
 struct ClientDataHandle<'a> {
@@ -49,13 +59,12 @@ struct ClientDataHandle<'a> {
     client_peer_id: &'a mut Option<PeerId>,
 }
 
-pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream) {
+pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream, mut client_peer_id: Option<PeerId>) {
     let (read, write) = stream.split();
 
     let mut framed_reader = FramedRead::new(read, MessageCodec {});
     let mut framed_writer = FramedWrite::new(write, MessageCodec {});
     let mut unfinished_messages: HashMap<u8, Vec<TcpMessage>> = HashMap::new();
-    let mut client_peer_id: Option<PeerId> = None;
 
     let mut handle = ClientDataHandle {
         client_data: &mut client_data,
@@ -124,7 +133,7 @@ pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream) {
 async fn handle_response<'a>(
     incoming: Option<Result<TcpMessage, std::io::Error>>,
     client_data: &mut ClientDataHandle<'a>,
-) -> Result<(), String> {
+) -> Result<()> {
     match incoming {
         Some(result) => match result {
             Ok(message) => {
@@ -132,98 +141,181 @@ async fn handle_response<'a>(
 
                 result
             }
-            Err(e) => return Err(e.to_string()),
+            Err(e) => Err(anyhow!(e.to_string())),
         },
-        None => return Err("TCP Connection was closed".to_string()),
+        None => Err(anyhow!("TCP Connection was closed")),
     }
 }
 
 async fn handle_tcp_message<'a>(
     incoming: TcpMessage,
     data: &mut ClientDataHandle<'a>,
-) -> Result<(), String> {
+) -> Result<()> {
     match incoming {
-
         TcpMessage::RequestPeerId => {
-            let res = data.tcp_write
-                .send(TcpMessage::SendPeerId(data.client_data.server.peer_id.clone()))
-                .await;
-
-            if let Err(e) = res {
-                return Err(e.to_string());
-            }
+            let _ = data
+                .tcp_write
+                .send(TcpMessage::SendPeerId(
+                    data.client_data.server.peer_id.clone(),
+                ))
+                .await?;
 
             Ok(())
         }
 
+        // TcpMessage::RequestDirectorySignatures => {
+        //     let id = match data.client_peer_id {
+        //         Some(pid) => pid,
+        //         None => bail!("Client Peer Id not yet set"),
+        //     };
+
+        //     let directories = data.client_data.server.config.cached_data.lock().await;
+        //     let signatures: Vec<ShareDirectorySignature> = directories
+        //         .iter()
+        //         .filter(|(dir_id, dir_sig)| dir_sig.signature.shared_peers.contains(id))
+        //         .map(|(dir_id, dir_sig)| dir_sig.signature.clone())
+        //         .collect();
+
+        //     if signatures.len() > 0 {
+        //         let _ = data
+        //             .tcp_write
+        //             .send(TcpMessage::SendDirectorySignatures(signatures))
+        //             .await?;
+        //     }
+
+        //     Ok(())
+        // }
+
         TcpMessage::SendPeerId(id) => {
             info!("Received {} peer id", &id);
 
-            let result = data.client_data
+            let _ = data
+                .client_data
                 .server
                 .channel
                 .send(MessageToServer::SetPeerId(
                     data.client_data.addr,
                     id.clone(),
                 ))
-                .await;
-
-            if let Err(e) = result {
-                return Err(e.to_string());
-            }
+                .await?;
 
             *data.client_peer_id = Some(id);
 
             Ok(())
         }
 
-        TcpMessage::NewShareDirectory(directory) => {
-            info!("New share directory started: {:?}", directory);
+        // TcpMessage::SendDirectorySignatures(signatures) => {
+        //     info!("Received {:?} signatures", &signatures);
 
-            let result = data.client_data
+        //     let _ = data
+        //         .client_data
+        //         .server
+        //         .channel
+        //         .send(MessageToServer::ReceivedSignatures(signatures))
+        //         .await?;
+
+        //     Ok(())
+        // }
+
+        TcpMessage::SendDirectories(directories) => {
+            info!("Received {:?} directories", &directories);
+
+            let _ = data
+                .client_data
                 .server
                 .channel
-                .send(MessageToServer::NewShareDirectory(directory))
-                .await;
+                .send(MessageToServer::SynchronizeDirectories(directories))
+                .await?;
 
-            if let Err(e) = result {
-                return Err(e.to_string());
+            Ok(())
+        }
+
+        TcpMessage::SharedDirectory(directory) => {
+            info!("Directory was shared {:?}", &directory);
+
+            let _ = data
+                .client_data
+                .server
+                .channel
+                .send(MessageToServer::SharedDirectory(directory))
+                .await?;
+
+            Ok(())
+        }
+
+        TcpMessage::Synchronize => {
+            info!("Synchronizing with {:?}", &data.client_peer_id);
+
+            let id = match data.client_peer_id {
+                Some(pid) => pid,
+                None => bail!("Client Peer Id not yet set"),
+            };
+
+            let directories = data.client_data.server.config.cached_data.lock().await;
+            let directories: Vec<ShareDirectory> = directories
+                .iter()
+                .filter(|(dir_id, dir)| dir.signature.shared_peers.contains(id))
+                .map(|(dir_id, dir)| dir.clone())
+                .collect();
+
+            if directories.len() > 0 {
+                let _ = data
+                    .tcp_write
+                    .send(TcpMessage::SendDirectories(directories))
+                    .await?;
             }
 
             Ok(())
         }
 
-        _ => Err("Unhandled TCP message".to_string()),
+        TcpMessage::Part(_, _) => {
+            todo!("Probably unused");
+        }
     }
 }
 
 async fn handle_server_messages(
     msg: MessageFromServer,
-    data: &mut ClientDataHandle<'_>
-) -> Result<(), String> {
+    data: &mut ClientDataHandle<'_>,
+) -> Result<()> {
     match msg {
-
         MessageFromServer::GetPeerId => {
-            let result = data.tcp_write.send(TcpMessage::RequestPeerId).await;
-
-            if let Err(e) = result {
-                return Err(e.to_string())
-            }
+            data.tcp_write.send(TcpMessage::RequestPeerId).await?;
 
             Ok(())
-        },
+        }
 
-        MessageFromServer::NotifyNewDirectory(directory) => {
-            let result = data.tcp_write.send(TcpMessage::NewShareDirectory(directory)).await;
+        // MessageFromServer::GetDirectorySignatures => {
+        //     data.tcp_write
+        //         .send(TcpMessage::RequestDirectorySignatures)
+        //         .await?;
 
-            if let Err(e) = result {
-                return Err(e.to_string())
-            }
+        //     Ok(())
+        // }
+
+        MessageFromServer::SharedDirectory(directory) => {
+            data.tcp_write
+                .send(TcpMessage::SharedDirectory(directory))
+                .await?;
 
             Ok(())
-        },
+        }
 
-        _ => Err(format!("Unhandled server message {:?}", msg))
+        MessageFromServer::SendDirectories(directories) => {
+            data.tcp_write
+                .send(TcpMessage::SendDirectories(directories))
+                .await?;
+
+            Ok(())
+        }
+
+        MessageFromServer::Synchronize => {
+            data.tcp_write
+                .send(TcpMessage::Synchronize)
+                .await?;
+
+            Ok(())
+        }
     }
 }
 
