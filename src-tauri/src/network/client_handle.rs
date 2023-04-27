@@ -40,7 +40,6 @@ pub struct ClientData {
     pub server: ServerHandle,
     pub passive_receiver: mpsc::Receiver<MessageFromServer>,
     pub active_receiver: mpsc::Receiver<MessageFromServer>,
-    pub broadcast_receiver: broadcast::Receiver<MessageFromServer>,
     pub addr: ClientConnectionId,
 }
 
@@ -70,7 +69,7 @@ pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream, mut
                 let result = handle_response(incoming, &mut handle).await;
 
                 if let Err(e) = result {
-                    error!("TCP connection err: {}", e);
+                    error!("TCP err: {}", e);
 
                     disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
                     return;
@@ -96,26 +95,26 @@ pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream, mut
                 }
             }
 
-            server_message = handle.client_data.broadcast_receiver.recv() => {
-                match server_message {
-                    Ok(message_from_server) => {
-                        let result = handle_server_messages(message_from_server, &mut handle).await;
+            // server_message = handle.client_data.broadcast_receiver.recv() => {
+            //     match server_message {
+            //         Ok(message_from_server) => {
+            //             let result = handle_server_messages(message_from_server, &mut handle).await;
 
-                        if let Err(e) = result {
-                            error!("{}", e);
+            //             if let Err(e) = result {
+            //                 error!("{}", e);
 
-                            disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
-                            return;
-                        }
-                    },
-                    Err(e) => {
-                        error!("{}", e);
+            //                 disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
+            //                 return;
+            //             }
+            //         },
+            //         Err(e) => {
+            //             error!("{}", e);
 
-                        disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
-                        return;
-                    }
-                }
-            }
+            //             disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
+            //             return;
+            //         }
+            //     }
+            // }
 
         }
     }
@@ -177,7 +176,11 @@ async fn handle_tcp_message<'a>(
 
             let msg = match data.client_peer_id {
                 Some(pid) => MessageToServer::SynchronizeDirectories(directories, pid.clone()),
-                None => bail!("PeerId not yet set")
+                None => {
+                    warn!("Peer ID not yet set");
+
+                    return Ok(());
+                }
             };
 
             let _ = data
@@ -208,14 +211,18 @@ async fn handle_tcp_message<'a>(
 
             let id = match data.client_peer_id {
                 Some(pid) => pid,
-                None => bail!("Client Peer Id not yet set"),
+                None => {
+                    warn!("Client Peer Id not yet set");
+
+                    return Ok(())
+                }
             };
 
             let directories = data.client_data.server.config.cached_data.lock().await;
             let directories: Vec<ShareDirectory> = directories
                 .iter()
-                .filter(|(dir_id, dir)| dir.signature.shared_peers.contains(id))
-                .map(|(dir_id, dir)| dir.clone())
+                .filter(|(_, dir)| dir.signature.shared_peers.contains(id))
+                .map(|(_, dir)| dir.clone())
                 .collect();
 
             if directories.len() > 0 {

@@ -12,12 +12,12 @@ use chrono::{DateTime, Utc};
 use cryptohelpers::crc::compute_stream;
 use mdns_sd::ServiceInfo;
 use serde::{Deserialize, Serialize};
-use tauri::{async_runtime::JoinHandle, AppHandle, Manager};
+use tauri::{async_runtime::{JoinHandle, Mutex}, AppHandle, Manager};
 use tokio::{
     net::TcpStream,
     sync::{
         broadcast,
-        mpsc::{self, Sender},
+        mpsc::{self, Sender}, MutexGuard,
     },
 };
 use uuid::Uuid;
@@ -72,9 +72,8 @@ pub enum MessageToServer {
 struct ServerData<'a> {
     window_manager: &'a AppHandle,
     server_handle: &'a ServerHandle,
-    clients: &'a mut HashMap<ClientConnectionId, ClientHandle>,
+    clients: &'a mut Mutex<HashMap<ClientConnectionId, ClientHandle>>,
     mdns_sender: &'a mpsc::Sender<MessageToMdns>,
-    broadcast_sender: &'a broadcast::Sender<MessageFromServer>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -106,9 +105,9 @@ pub async fn server_loop(
     mdns_sender: mpsc::Sender<MessageToMdns>,
     server_handle: ServerHandle,
 ) {
-    let (broadcast_sender, mut _broadcast_receiver) =
-        broadcast::channel::<MessageFromServer>(CHANNEL_SIZE);
-    let mut clients: HashMap<ClientConnectionId, ClientHandle> = HashMap::new();
+    // let (broadcast_sender, mut _broadcast_receiver) =
+    //     broadcast::channel::<MessageFromServer>(CHANNEL_SIZE);
+    let mut clients: Mutex<HashMap<ClientConnectionId, ClientHandle>> = Mutex::new(HashMap::new());
     let mut interval = tokio::time::interval(Duration::from_secs(UPDATE_PERIOD));
 
     loop {
@@ -117,7 +116,6 @@ pub async fn server_loop(
             server_handle: &server_handle,
             clients: &mut clients,
             mdns_sender: &mdns_sender,
-            broadcast_sender: &broadcast_sender,
         };
 
         tokio::select! {
@@ -143,9 +141,10 @@ pub async fn server_loop(
 }
 
 async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
+    let mut clients = server_data.clients.lock().await;
     let mut clients_to_remove = vec![];
 
-    for (key, value) in server_data.clients.iter_mut() {
+    for (key, value) in clients.iter_mut() {
         if !value.job_queue.is_empty() {
             let next_job = value.job_queue.pop_front();
 
@@ -164,7 +163,7 @@ async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
     }
 
     for client_key in clients_to_remove.iter() {
-        let removed = server_data.clients.remove(client_key);
+        let removed = clients.remove(client_key);
 
         match removed {
             Some(client) => disconnected_client(client, server_data.mdns_sender).await,
@@ -194,13 +193,15 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                     let socket_addr = SocketAddrV4::new(*ip, port);
                     let socket_addr = SocketAddr::V4(socket_addr);
 
-                    if !server_data.clients.contains_key(&ip_addr) {
+                    let mut clients = server_data.clients.lock().await;
+
+                    if !clients.contains_key(&ip_addr) {
                         let tcp_stream = TcpStream::connect(socket_addr).await?;
 
-                        add_client(&mut server_data, tcp_stream, ip_addr, Some(service.clone()))
+                        add_client(server_data.server_handle.clone(), &mut clients, tcp_stream, ip_addr, Some(service.clone()))
                             .await?;
 
-                        if server_data.clients.contains_key(&ip_addr) {
+                        if clients.contains_key(&ip_addr) {
                             let _ = server_data
                                 .mdns_sender
                                 .send(MessageToMdns::ConnectedService(service))
@@ -220,16 +221,18 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
         MessageToServer::ConnectionAccepted(tcp, addr) => {
             let ip_addr = addr.ip();
+            let mut clients = server_data.clients.lock().await;
 
-            if !server_data.clients.contains_key(&ip_addr) {
-                add_client(&mut server_data, tcp, ip_addr, None).await
+            if !clients.contains_key(&ip_addr) {
+                add_client(server_data.server_handle.clone(), &mut clients, tcp, ip_addr, None).await
             } else {
                 Err(anyhow!("TCP accepted client already connected: {}", addr))
             }
         }
 
         MessageToServer::SetPeerId(addr, id) => {
-            let client = server_data.clients.get_mut(&addr);
+            let mut clients = server_data.clients.lock().await;
+            let client = clients.get_mut(&addr);
 
             match client {
                 Some(client) => {
@@ -247,7 +250,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
         }
 
         MessageToServer::KillClient(client_addr) => {
-            let client = server_data.clients.remove(&client_addr);
+            let client = server_data.clients.lock().await.remove(&client_addr);
 
             match client {
                 Some(client) => {
@@ -273,8 +276,9 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
         MessageToServer::SynchronizeDirectories(directories, peer) => {
             let mut owned_dirs = server_data.server_handle.config.cached_data.lock().await;
-            let client = server_data
-                .clients
+            let mut clients = server_data.clients.lock().await;
+
+            let client = clients
                 .iter_mut()
                 .find(|(_, cdata)| match &cdata.id {
                     Some(pid) => pid == &peer,
@@ -415,10 +419,12 @@ async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>)
             let id = Uuid::from_str(&directory_identifier)?;
             let directory = directories.get_mut(&id);
 
+            let clients = server_data.clients.lock().await;
+
             if let Some(dir) = directory {
                 dir.signature.shared_peers.extend(peers);
 
-                for (_, cval) in server_data.clients {
+                for (_, cval) in clients.iter() {
                     if let Some(pid) = &cval.id {
                         if dir.signature.shared_peers.contains(&pid) {
                             cval.passive_sender
@@ -437,7 +443,8 @@ async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>)
 }
 
 async fn add_client<'a>(
-    server_data: &mut ServerData<'a>,
+    server_handle: ServerHandle,
+    clients: &mut MutexGuard<'a, HashMap<IpAddr, ClientHandle>>,
     tcp: TcpStream,
     addr: ClientConnectionId,
     service_info: Option<ServiceInfo>,
@@ -448,8 +455,7 @@ async fn add_client<'a>(
     let (active_sender, active_receiver) = mpsc::channel(CHANNEL_SIZE);
 
     let client_data = ClientData {
-        server: server_data.server_handle.clone(),
-        broadcast_receiver: server_data.broadcast_sender.subscribe(),
+        server: server_handle,
         passive_receiver,
         active_receiver,
         addr,
@@ -479,7 +485,8 @@ async fn add_client<'a>(
         job_queue,
     };
 
-    let _ = server_data.clients.insert(addr, client);
+    //let mut clients = server_data.clients.lock().await;
+    let _ = clients.insert(addr, client);
 
     // if pid.is_none() {
     //     passive_sender.send(MessageFromServer::GetPeerId).await?;
