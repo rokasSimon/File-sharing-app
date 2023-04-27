@@ -7,6 +7,7 @@ use std::{
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+use tauri::async_runtime::Mutex;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::peer_id::PeerId;
@@ -77,7 +78,7 @@ pub async fn start_mdns(
 
     let reconnect_time = chrono::Duration::seconds(RECONNECT_TIME);
     let mut reregister_interval = tokio::time::interval(Duration::from_secs(MDNS_UPDATE_TIME));
-    let mut resolved_services: HashMap<String, ResolvedServiceInfo> = HashMap::new();
+    let mut resolved_services: Mutex<HashMap<String, ResolvedServiceInfo>> = Mutex::new(HashMap::new());
 
     loop {
         tokio::select! {
@@ -91,7 +92,9 @@ pub async fn start_mdns(
                 match server_action {
 
                     MessageToMdns::RemoveService(service_to_remove) => {
-                        if let Some(mut service) = resolved_services.get_mut(service_to_remove.get_fullname()) {
+                        let mut services = resolved_services.lock().await;
+
+                        if let Some(mut service) = services.get_mut(service_to_remove.get_fullname()) {
                             let current_time = Utc::now();
                             info!("Disconnecting service at {}", current_time);
                             service.status = ServiceStatus::Disconnected(current_time);
@@ -99,9 +102,11 @@ pub async fn start_mdns(
                     }
 
                     MessageToMdns::ConnectedService(service_connected) => {
-                        info!("Connected service {}", service_connected.get_fullname());
-                        if let None = resolved_services.get(service_connected.get_fullname()) {
-                            resolved_services.insert(service_connected.get_fullname().to_owned(), ResolvedServiceInfo {
+                        let mut services = resolved_services.lock().await;
+
+                        if let None = services.get(service_connected.get_fullname()) {
+                            info!("Connected service {}", service_connected.get_fullname());
+                            services.insert(service_connected.get_fullname().to_owned(), ResolvedServiceInfo {
                                 service_info: service_connected,
                                 status: ServiceStatus::Connected
                             });
@@ -111,13 +116,14 @@ pub async fn start_mdns(
             }
             _ = reregister_interval.tick() => {
                 let res = mdns.register(service_info.clone());
+                let services = resolved_services.lock().await;
 
                 match res {
                     Ok(()) => info!("Registered service"),
                     Err(e) => error!("{}", e)
                 };
 
-                for (_, rsv) in resolved_services.iter() {
+                for (_, rsv) in services.iter() {
                     match rsv.status {
                         ServiceStatus::Connected => (),
                         ServiceStatus::Disconnected(disconnect_time) => {
@@ -139,7 +145,7 @@ async fn handle_mdns_event(
     event: &ServiceEvent,
     server_handle: &ServerHandle,
     my_hostname: &str,
-    resolved_services: &HashMap<String, ResolvedServiceInfo>,
+    resolved_services: &Mutex<HashMap<String, ResolvedServiceInfo>>,
 ) {
     match event {
         ServiceEvent::ServiceResolved(service) => {
@@ -149,7 +155,8 @@ async fn handle_mdns_event(
                 return;
             }
 
-            let existing_service = resolved_services.get(service.get_fullname());
+            let services = resolved_services.lock().await;
+            let existing_service = services.get(service.get_fullname());
             match existing_service {
                 Some(_) => return,
                 None => {
@@ -161,9 +168,6 @@ async fn handle_mdns_event(
                         .await;
                 }
             }
-        }
-        ServiceEvent::ServiceRemoved(service_type, fullname) => {
-            warn!("Removed service {} {}", service_type, fullname);
         }
         _ => (),
     }

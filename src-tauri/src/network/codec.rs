@@ -102,6 +102,7 @@ fn decode_message(src: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
 }
 
 fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
+    info!("encoding {:?}", src);
     let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
     let len = enc.len() + LENGTH_MARKER_SIZE;
 

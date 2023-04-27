@@ -153,13 +153,14 @@ async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
             let next_job = value.job_queue.pop_front();
 
             if let Some(job) = next_job {
-                let send_result = value.passive_sender.send(job).await;
+                let send_result = value.passive_sender.send(job.clone()).await;
 
                 if let Err(e) = send_result {
                     error!(
                     "Could not send value to client {} because {}. Client will be disconnected.",
                     key, e
                 );
+                    value.job_queue.push_back(job);
                     clients_to_remove.push(key.to_owned());
                 }
             }
@@ -239,7 +240,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                 )
                 .await
             } else {
-                Err(anyhow!("TCP accepted client already connected: {}", addr))
+                Err(anyhow!("TCP accepted client that is already connected: {}", addr))
             }
         }
 
