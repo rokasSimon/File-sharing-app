@@ -465,10 +465,10 @@ async fn add_client<'a>(
     };
 
     let join = tauri::async_runtime::spawn(client_loop(client_data, tcp, pid.clone()));
-    let job_queue = VecDeque::from([
-        MessageFromServer::GetPeerId,
-        MessageFromServer::Synchronize
-    ]);
+    let mut job_queue = VecDeque::new();
+
+    job_queue.push_back(MessageFromServer::GetPeerId);
+    job_queue.push_back(MessageFromServer::Synchronize);
 
     let client = ClientHandle {
         id: pid.clone(),
