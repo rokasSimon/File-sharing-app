@@ -83,7 +83,7 @@ pub async fn start_mdns(
         tokio::select! {
             event = service_receiver.recv_async() => {
                 match event {
-                    Ok(ev) => handle_mdns_event(&ev, &server_handle, &host_name).await,
+                    Ok(ev) => handle_mdns_event(&ev, &server_handle, &host_name, &resolved_services).await,
                     Err(err) => error!("Event received was error: {}", err)
                 }
             }
@@ -133,18 +133,27 @@ pub async fn start_mdns(
     }
 }
 
-async fn handle_mdns_event(event: &ServiceEvent, server_handle: &ServerHandle, my_hostname: &str) {
+async fn handle_mdns_event(
+    event: &ServiceEvent,
+    server_handle: &ServerHandle,
+    my_hostname: &str,
+    resolved_services: &HashMap<String, ResolvedServiceInfo>,
+) {
     match event {
         ServiceEvent::ServiceResolved(service) => {
             info!("Resolved service {:?}", service);
 
-            if service.get_hostname() != my_hostname {
-                info!("Adding service: {:?}", service);
+            let existing_service = resolved_services.get(service.get_fullname());
+            match existing_service {
+                Some(service) => return,
+                None => {
+                    info!("Adding service: {:?}", service);
 
-                let _ = server_handle
-                    .channel
-                    .send(MessageToServer::ServiceFound(service.clone()))
-                    .await;
+                    let _ = server_handle
+                        .channel
+                        .send(MessageToServer::ServiceFound(service.clone()))
+                        .await;
+                }
             }
         }
         ServiceEvent::ServiceRemoved(service_type, fullname) => {

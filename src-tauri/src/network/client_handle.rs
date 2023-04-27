@@ -79,7 +79,7 @@ pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream, mut
                 let result = handle_response(incoming, &mut handle).await;
 
                 if let Err(e) = result {
-                    error!("{}", e);
+                    error!("TCP connection err: {}", e);
 
                     disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
                     return;
@@ -92,7 +92,7 @@ pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream, mut
                         let result = handle_server_messages(message_from_server, &mut handle).await;
 
                         if let Err(e) = result {
-                            error!("{}", e);
+                            error!("Server err: {}", e);
 
                             disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
                             return;
@@ -163,29 +163,6 @@ async fn handle_tcp_message<'a>(
             Ok(())
         }
 
-        // TcpMessage::RequestDirectorySignatures => {
-        //     let id = match data.client_peer_id {
-        //         Some(pid) => pid,
-        //         None => bail!("Client Peer Id not yet set"),
-        //     };
-
-        //     let directories = data.client_data.server.config.cached_data.lock().await;
-        //     let signatures: Vec<ShareDirectorySignature> = directories
-        //         .iter()
-        //         .filter(|(dir_id, dir_sig)| dir_sig.signature.shared_peers.contains(id))
-        //         .map(|(dir_id, dir_sig)| dir_sig.signature.clone())
-        //         .collect();
-
-        //     if signatures.len() > 0 {
-        //         let _ = data
-        //             .tcp_write
-        //             .send(TcpMessage::SendDirectorySignatures(signatures))
-        //             .await?;
-        //     }
-
-        //     Ok(())
-        // }
-
         TcpMessage::SendPeerId(id) => {
             info!("Received {} peer id", &id);
 
@@ -203,19 +180,6 @@ async fn handle_tcp_message<'a>(
 
             Ok(())
         }
-
-        // TcpMessage::SendDirectorySignatures(signatures) => {
-        //     info!("Received {:?} signatures", &signatures);
-
-        //     let _ = data
-        //         .client_data
-        //         .server
-        //         .channel
-        //         .send(MessageToServer::ReceivedSignatures(signatures))
-        //         .await?;
-
-        //     Ok(())
-        // }
 
         TcpMessage::SendDirectories(directories) => {
             info!("Received {:?} directories", &directories);
@@ -289,14 +253,6 @@ async fn handle_server_messages(
 
             Ok(())
         }
-
-        // MessageFromServer::GetDirectorySignatures => {
-        //     data.tcp_write
-        //         .send(TcpMessage::RequestDirectorySignatures)
-        //         .await?;
-
-        //     Ok(())
-        // }
 
         MessageFromServer::SharedDirectory(directory) => {
             data.tcp_write

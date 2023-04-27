@@ -211,9 +211,9 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                             return Ok(());
                         }
 
-                        Err(anyhow!("Client already connected: {}", socket_addr))
+                        Err(anyhow!("Client added, but map does not contain client"))
                     } else {
-                        Err(anyhow!("Client already connected: {}", socket_addr))
+                        Err(anyhow!("Service client already connected: {}", socket_addr))
                     }
                 }
                 None => Err(anyhow!("Service had no associated IP addresses")),
@@ -226,7 +226,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             if !server_data.clients.contains_key(&ip_addr) {
                 add_client(&mut server_data, tcp, ip_addr, None).await
             } else {
-                Err(anyhow!("Client already connected: {}", addr))
+                Err(anyhow!("TCP accepted client already connected: {}", addr))
             }
         }
 
@@ -321,64 +321,6 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                 None => Err(anyhow!("No client found"))
             }
         }
-
-        // MessageToServer::NewShareDirectory(directory) => {
-        //     let mut directories = server_data.server_handle.config.cached_data.lock().await;
-
-        //     let new_dir = ShareDirectory {
-        //         signature: directory.clone(),
-        //         shared_files: HashMap::new(),
-        //     };
-
-        //     directories.insert(new_dir.signature.identifier, new_dir);
-
-        //     let _ = server_data.window_manager.emit_to(
-        //         MAIN_WINDOW_LABEL,
-        //         "NewShareDirectory",
-        //         directory,
-        //     )?;
-
-        //     Ok(())
-        // }
-
-        // MessageToServer::ReceivedSignatures(signatures) => {
-        //     let mut directories = server_data.server_handle.config.cached_data.lock().await;
-
-        //     let mut directories_to_sync: HashMap<PeerId, Vec<ShareDirectorySignature>> = HashMap::new();
-        //     for signature in signatures {
-        //         let dir = directories.get(&signature.identifier);
-
-        //         match dir {
-        //             Some(known_dir) => {
-        //                 if known_dir.signature.last_modified < signature.last_modified {
-        //                     directories_to_sync.push(signature);
-        //                 }
-        //             }
-        //             None => {
-        //                 directories.insert(
-        //                     signature.identifier,
-        //                     ShareDirectory {
-        //                         signature: signature.clone(),
-        //                         shared_files: HashMap::new(),
-        //                     },
-        //                 );
-        //                 directories_to_sync.push(signature);
-        //             }
-        //         }
-        //     }
-
-        //     for sig_sync in directories_to_sync {
-
-        //     }
-
-        //     // let _ = server_data.window_manager.emit_to(
-        //     //     MAIN_WINDOW_LABEL,
-        //     //     "NewShareDirectory",
-        //     //     directory,
-        //     // )?;
-
-        //     Ok(())
-        // }
     }
 }
 
