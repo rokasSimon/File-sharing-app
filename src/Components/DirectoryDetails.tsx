@@ -97,11 +97,11 @@ function DirectoryDetails({
     if (!file) return;
 
     const request: DownloadFile = {
-      fileIdentifier: fileId,
-      directoryIdentifier
+      downloadFile: {
+        file_identifier: fileId,
+        directory_identifier: directoryIdentifier,
+      },
     };
-
-    
   };
 
   const handleDelete = (fileId: string) => () => {
@@ -110,11 +110,13 @@ function DirectoryDetails({
     if (!file) return;
 
     const request: DeleteFile = {
-      fileIdentifier: fileId,
-      directoryIdentifier
+      deleteFile: {
+        file_identifier: fileId,
+        directory_identifier: directoryIdentifier,
+      },
     };
 
-    invokeNetworkCommand(request).then((value) => {
+    invokeNetworkCommand(request).finally(() => {
       handleCloseFileDetails();
     });
   };
@@ -221,24 +223,26 @@ function DirectoryDetails({
             <DialogContent>
               {fileDetails.contentLocation &&
                 fileDetails.contentLocation.localPath && (
-                  <Box marginBottom={'1em'}>
-                    <Typography variant="caption" color={"GrayText"}>Local path:</Typography>
+                  <Box marginBottom={"1em"}>
+                    <Typography variant="caption" color={"GrayText"}>
+                      Local path:
+                    </Typography>
                     <Typography variant="body1">
                       {fileDetails.contentLocation.localPath}
                     </Typography>
                   </Box>
                 )}
               {fileDetails.ownedPeers && fileDetails.ownedPeers.length > 0 && (
-                <div>
-                  <Typography variant="caption" color={"GrayText"}>Devices that have this file:</Typography>
+                <Box>
+                  <Typography variant="caption" color={"GrayText"}>
+                    Devices that have this file:
+                  </Typography>
                   {fileDetails.ownedPeers.map((peer) => {
-                      return (
-                        <Typography key={peer.uuid}>
-                          {peer.hostname}
-                        </Typography>
-                      );
-                    })}
-                </div>
+                    return (
+                      <Typography key={peer.uuid}>{peer.hostname}</Typography>
+                    );
+                  })}
+                </Box>
               )}
             </DialogContent>
             <DialogActions>

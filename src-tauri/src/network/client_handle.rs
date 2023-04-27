@@ -241,7 +241,7 @@ async fn handle_tcp_message<'a>(
             let dir = directories.get_mut(&directory.identifier);
 
             if let Some(dir) = dir {
-                dir.delete_files(peer_id, directory.last_modified, vec![file]);
+                dir.delete_files(&peer_id, directory.last_modified, vec![file]);
 
                 let _ = data
                     .client_data

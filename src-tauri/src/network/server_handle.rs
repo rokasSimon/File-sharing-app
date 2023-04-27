@@ -131,13 +131,6 @@ impl WindowAction {
     pub const NewShareDirectory: &str = "NewShareDirectory";
 }
 
-// #[derive(Serialize, Deserialize, Clone, Debug)]
-// #[serde(rename_all = "camelCase")]
-// pub struct AddedFiles {
-//     pub directory_identifier: Uuid,
-//     pub shared_files: Vec<SharedFile>,
-// }
-
 pub async fn server_loop(
     window_manager: AppHandle,
     mut client_receiver: mpsc::Receiver<MessageToServer>,
@@ -547,35 +540,52 @@ async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>)
             let directory = directories.get_mut(&dir_id);
             if let Some(dir) = directory {
                 let file = dir.shared_files.get_mut(&file_id);
-
-                if let Some(file) = file {
-                    match &file.content_location {
-                        ContentLocation::LocalPath(path) => {
-                            if path.exists() {
-                                fs::remove_file(path).await?;
+                let peers_to_send_to = match file {
+                    None => return Ok(()),
+                    Some(file) => {
+                        match &file.content_location {
+                            ContentLocation::LocalPath(path) => {
+                                if path.exists() {
+                                    fs::remove_file(path).await?;
+                                }
                             }
+                            _ => (),
                         }
-                        _ => (),
+
+                        let peers = file.owned_peers.clone();
+
+                        dir.delete_files(&server_data.server_handle.peer_id, Utc::now(), vec![file_id.clone()]);
+
+                        peers
                     }
+                };
 
-                    file.owned_peers
-                        .retain(|peer| peer != &server_data.server_handle.peer_id);
-                    file.content_location = ContentLocation::NetworkOnly;
-                    dir.signature.last_modified = Utc::now();
+                server_data.broadcast(&peers_to_send_to, MessageFromServer::DeleteFile(server_data.server_handle.peer_id.clone(), dir.signature.clone(), file_id.clone())).await;
 
-                    server_data
-                        .broadcast(
-                            &file.owned_peers,
-                            MessageFromServer::DeleteFile(
-                                server_data.server_handle.peer_id.clone(),
-                                dir.signature.clone(),
-                                file.identifier,
-                            ),
-                        )
-                        .await;
+                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UpdateDirectory, dir.clone())?;
 
-                    let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UpdateDirectory, dir.clone())?;
-                }
+
+                // if let Some(file) = file {
+                    
+
+                //     file.owned_peers
+                //         .retain(|peer| peer != &server_data.server_handle.peer_id);
+                //     file.content_location = ContentLocation::NetworkOnly;
+                //     dir.signature.last_modified = Utc::now();
+
+                //     server_data
+                //         .broadcast(
+                //             &file.owned_peers,
+                //             MessageFromServer::DeleteFile(
+                //                 server_data.server_handle.peer_id.clone(),
+                //                 dir.signature.clone(),
+                //                 file.identifier,
+                //             ),
+                //         )
+                //         .await;
+
+                //     let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UpdateDirectory, dir.clone())?;
+                // }
             }
 
             Ok(())

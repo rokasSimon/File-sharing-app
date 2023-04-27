@@ -26,7 +26,7 @@ impl ShareDirectory {
 
     pub fn delete_files(
         &mut self,
-        peer_id: PeerId,
+        peer_id: &PeerId,
         date_modified: DateTime<Utc>,
         file_ids: Vec<Uuid>,
     ) {
@@ -37,7 +37,7 @@ impl ShareDirectory {
 
             let should_delete_fully = match some_file {
                 Some(file) => {
-                    file.owned_peers.retain(|peer| peer != &peer_id);
+                    file.owned_peers.retain(|peer| peer != peer_id);
 
                     file.owned_peers.len() == 0
                 }
