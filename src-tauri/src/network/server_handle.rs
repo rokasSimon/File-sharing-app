@@ -240,7 +240,10 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                 )
                 .await
             } else {
-                Err(anyhow!("TCP accepted client that is already connected: {}", addr))
+                Err(anyhow!(
+                    "TCP accepted client that is already connected: {}",
+                    addr
+                ))
             }
         }
 

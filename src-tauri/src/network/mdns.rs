@@ -78,7 +78,8 @@ pub async fn start_mdns(
 
     let reconnect_time = chrono::Duration::seconds(RECONNECT_TIME);
     let mut reregister_interval = tokio::time::interval(Duration::from_secs(MDNS_UPDATE_TIME));
-    let mut resolved_services: Mutex<HashMap<String, ResolvedServiceInfo>> = Mutex::new(HashMap::new());
+    let mut resolved_services: Mutex<HashMap<String, ResolvedServiceInfo>> =
+        Mutex::new(HashMap::new());
 
     loop {
         tokio::select! {
@@ -103,13 +104,19 @@ pub async fn start_mdns(
 
                     MessageToMdns::ConnectedService(service_connected) => {
                         let mut services = resolved_services.lock().await;
+                        let service = services.get_mut(service_connected.get_fullname());
 
-                        if let None = services.get(service_connected.get_fullname()) {
-                            info!("Connected service {}", service_connected.get_fullname());
-                            services.insert(service_connected.get_fullname().to_owned(), ResolvedServiceInfo {
-                                service_info: service_connected,
-                                status: ServiceStatus::Connected
-                            });
+                        match service {
+                            None => {
+                                info!("Connected service {}", service_connected.get_fullname());
+                                services.insert(service_connected.get_fullname().to_owned(), ResolvedServiceInfo {
+                                    service_info: service_connected,
+                                    status: ServiceStatus::Connected
+                                });
+                            },
+                            Some(service) => {
+                                service.status = ServiceStatus::Connected;
+                            }
                         }
                     }
                 }
