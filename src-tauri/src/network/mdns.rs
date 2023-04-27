@@ -15,6 +15,7 @@ use super::server_handle::{MessageToServer, ServerHandle};
 
 pub const SERVICE_TYPE: &str = "_ktu_fileshare._tcp.local.";
 pub const MDNS_UPDATE_TIME: u64 = 120;
+pub const RECONNECT_TIME: u64 = 15;
 
 const MDNS_PORT: u16 = 61000;
 
@@ -74,7 +75,7 @@ pub async fn start_mdns(
 
     let service_receiver = mdns.browse(SERVICE_TYPE).expect("should start mDNS browse");
 
-    let reconnect_time = chrono::Duration::seconds(60);
+    let reconnect_time = chrono::Duration::seconds(RECONNECT_TIME);
     let mut reregister_interval = tokio::time::interval(Duration::from_secs(MDNS_UPDATE_TIME));
     let mut resolved_services: HashMap<String, ResolvedServiceInfo> = HashMap::new();
 

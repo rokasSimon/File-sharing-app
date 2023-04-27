@@ -55,7 +55,7 @@ pub enum MessageToServer {
     ConnectionAccepted(TcpStream, SocketAddr),
     KillClient(ClientConnectionId),
 
-    SynchronizeDirectories(Vec<ShareDirectory>),
+    SynchronizeDirectories(Vec<ShareDirectory>, PeerId),
 
     SharedDirectory(ShareDirectory),
     //NewShareDirectory(ShareDirectorySignature),
@@ -270,43 +270,56 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             Err(anyhow!("Directory was already shared"))
         }
 
-        MessageToServer::SynchronizeDirectories(directories) => {
+        MessageToServer::SynchronizeDirectories(directories, peer) => {
             let mut owned_dirs = server_data.server_handle.config.cached_data.lock().await;
-
-            for dir in directories {
-                let od = owned_dirs.get_mut(&dir.signature.identifier);
-
-                match od {
-                    Some(matched_dir) => {
-                        for pid in dir.signature.shared_peers {
-                            if !matched_dir.signature.shared_peers.contains(&pid) {
-                                matched_dir.signature.shared_peers.push(pid);
-                            }
-                        }
-
-                        if dir.signature.last_modified > matched_dir.signature.last_modified {
-                            for (id, file) in dir.shared_files {
-                                if !matched_dir.shared_files.contains_key(&id) {
-                                    matched_dir.shared_files.insert(id, file);
-                                }
-                            }
-
-                            matched_dir.signature.last_modified = dir.signature.last_modified;
-                        }
-                    },
-                    None => {
-                        owned_dirs.insert(dir.signature.identifier, dir);
-                    }
+            let client = server_data.clients.iter_mut().find(|(_, cdata)| {
+                match &cdata.id {
+                    Some(pid) => pid == &peer,
+                    None => false
                 }
+            });
+
+            match client {
+                Some((_, mut c)) => {
+                    for dir in directories {
+                        let od = owned_dirs.get_mut(&dir.signature.identifier);
+        
+                        match od {
+                            Some(matched_dir) => {
+                                for pid in dir.signature.shared_peers {
+                                    if !matched_dir.signature.shared_peers.contains(&pid) {
+                                        matched_dir.signature.shared_peers.push(pid);
+                                    }
+                                }
+        
+                                if dir.signature.last_modified > matched_dir.signature.last_modified {
+                                    for (id, file) in dir.shared_files {
+                                        if !matched_dir.shared_files.contains_key(&id) {
+                                            matched_dir.shared_files.insert(id, file);
+                                        }
+                                    }
+        
+                                    matched_dir.signature.last_modified = dir.signature.last_modified;
+                                }
+                            },
+                            None => {
+                                owned_dirs.insert(dir.signature.identifier, dir);
+                            }
+                        }
+                    }
+        
+                    let _ = server_data.window_manager.emit_to(
+                        MAIN_WINDOW_LABEL,
+                        "UpdateShareDirectories",
+                        owned_dirs.values().cloned().collect::<Vec<ShareDirectory>>(),
+                    )?;
+
+                    c.is_synchronised = true;
+        
+                    Ok(())
+                },
+                None => Err(anyhow!("No client found"))
             }
-
-            let _ = server_data.window_manager.emit_to(
-                MAIN_WINDOW_LABEL,
-                "UpdateShareDirectories",
-                owned_dirs.values().cloned().collect::<Vec<ShareDirectory>>(),
-            )?;
-
-            Ok(())
         }
 
         // MessageToServer::NewShareDirectory(directory) => {

@@ -220,11 +220,16 @@ async fn handle_tcp_message<'a>(
         TcpMessage::SendDirectories(directories) => {
             info!("Received {:?} directories", &directories);
 
+            let msg = match data.client_peer_id {
+                Some(pid) => MessageToServer::SynchronizeDirectories(directories, pid.clone()),
+                None => bail!("PeerId not yet set")
+            };
+
             let _ = data
                 .client_data
                 .server
                 .channel
-                .send(MessageToServer::SynchronizeDirectories(directories))
+                .send(msg)
                 .await?;
 
             Ok(())
