@@ -1,10 +1,10 @@
 # Summary
 
-Date : 2023-04-26 22:28:53
+Date : 2023-04-27 22:59:00
 
 Directory e:\\DEV\\Rust\\file-sharing-app
 
-Total : 39 files,  32567 codes, 172 comments, 488 blanks, all 33227 lines
+Total : 40 files,  33218 codes, 103 comments, 596 blanks, all 33917 lines
 
 Summary / [Details](details.md) / [Diff Summary](diff.md) / [Diff Details](diff-details.md)
 
@@ -12,8 +12,8 @@ Summary / [Details](details.md) / [Diff Summary](diff.md) / [Diff Details](diff-
 | language | files | code | comment | blank | total |
 | :--- | ---: | ---: | ---: | ---: | ---: |
 | JSON | 4 | 30,458 | 0 | 3 | 30,461 |
-| Rust | 12 | 1,142 | 120 | 308 | 1,570 |
-| TypeScript JSX | 9 | 662 | 19 | 107 | 788 |
+| Rust | 12 | 1,446 | 45 | 348 | 1,839 |
+| TypeScript JSX | 10 | 1,009 | 25 | 175 | 1,209 |
 | CSS | 5 | 179 | 0 | 37 | 216 |
 | TOML | 1 | 37 | 5 | 5 | 47 |
 | JSON with Comments | 1 | 26 | 0 | 1 | 27 |
@@ -26,18 +26,18 @@ Summary / [Details](details.md) / [Diff Summary](diff.md) / [Diff Details](diff-
 ## Directories
 | path | files | code | comment | blank | total |
 | :--- | ---: | ---: | ---: | ---: | ---: |
-| . | 39 | 32,567 | 172 | 488 | 33,227 |
+| . | 40 | 33,218 | 103 | 596 | 33,917 |
 | . (Files) | 5 | 30,380 | 0 | 24 | 30,404 |
 | public | 2 | 45 | 23 | 2 | 70 |
-| src | 18 | 856 | 24 | 149 | 1,029 |
-| src (Files) | 9 | 204 | 12 | 45 | 261 |
-| src-tauri | 14 | 1,286 | 125 | 313 | 1,724 |
+| src | 19 | 1,203 | 30 | 217 | 1,450 |
+| src (Files) | 9 | 209 | 8 | 45 | 262 |
+| src-tauri | 14 | 1,590 | 50 | 353 | 1,993 |
 | src-tauri (Files) | 3 | 147 | 5 | 6 | 158 |
-| src-tauri\\src | 11 | 1,139 | 120 | 307 | 1,566 |
-| src-tauri\\src (Files) | 6 | 351 | 42 | 89 | 482 |
-| src-tauri\\src\\network | 5 | 788 | 78 | 218 | 1,084 |
-| src\\Components | 5 | 302 | 0 | 38 | 340 |
-| src\\RustCommands | 2 | 155 | 12 | 39 | 206 |
-| src\\pages | 2 | 195 | 0 | 27 | 222 |
+| src-tauri\\src | 11 | 1,443 | 45 | 347 | 1,835 |
+| src-tauri\\src (Files) | 6 | 383 | 42 | 96 | 521 |
+| src-tauri\\src\\network | 5 | 1,060 | 3 | 251 | 1,314 |
+| src\\Components | 5 | 395 | 0 | 50 | 445 |
+| src\\RustCommands | 3 | 211 | 22 | 61 | 294 |
+| src\\pages | 2 | 388 | 0 | 61 | 449 |
 
 Summary / [Details](details.md) / [Diff Summary](diff.md) / [Diff Details](diff-details.md)

@@ -2,8 +2,18 @@ import {
   Box,
   Breadcrumbs,
   Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Divider,
   IconButton,
   Link,
+  List,
+  ListItem,
+  ListItemText,
+  ListSubheader,
   Paper,
   Table,
   TableBody,
@@ -12,15 +22,20 @@ import {
   TableFooter,
   TableHead,
   TableRow,
+  Typography,
 } from "@mui/material";
 import InfoRoundedIcon from "@mui/icons-material/InfoRounded";
 import NavigateNextRoundedIcon from "@mui/icons-material/NavigateNextRounded";
 import FolderIcon from "@mui/icons-material/Folder";
+import DownloadIcon from "@mui/icons-material/Download";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { SharedFile } from "../RustCommands/ShareDirectoryContext";
 
 import { open } from "@tauri-apps/api/dialog";
 import {
   AddFiles,
+  DeleteFile,
+  DownloadFile,
   invokeNetworkCommand,
 } from "../RustCommands/networkCommands";
 import React from "react";
@@ -46,6 +61,9 @@ function DirectoryDetails({
   directoryName,
   directoryIdentifier,
 }: DirectoryDetailsProps) {
+  const [fileDetails, setFileDetails] = React.useState<SharedFile | null>(null);
+  const detailsOpen = Boolean(fileDetails);
+
   const handleAddFiles = async () => {
     const selected = await open({
       multiple: true,
@@ -65,6 +83,40 @@ function DirectoryDetails({
     }
   };
 
+  const handleOpenFileDetails = (file: SharedFile) => () => {
+    setFileDetails(file);
+  };
+
+  const handleCloseFileDetails = () => {
+    setFileDetails(null);
+  };
+
+  const handleDownload = (fileId: string) => () => {
+    const file = files.get(fileId);
+
+    if (!file) return;
+
+    const request: DownloadFile = {
+      fileIdentifier: fileId
+    };
+
+    
+  };
+
+  const handleDelete = (fileId: string) => () => {
+    const file = files.get(fileId);
+
+    if (!file) return;
+
+    const request: DeleteFile = {
+      fileIdentifier: fileId
+    };
+
+    invokeNetworkCommand(request).then((value) => {
+      handleCloseFileDetails();
+    });
+  };
+
   let rows = [];
   for (const [id, file] of files.entries()) {
     const row = (
@@ -74,11 +126,16 @@ function DirectoryDetails({
           {toLargestDenominator(file.size)}
         </TableCell>
         <TableCell variant="body" align="right">
-          {new Date(file.lastModified).toDateString()}
+          {new Date(file.lastModified).toLocaleString()}
         </TableCell>
         <TableCell variant="body" align="right">
-          <IconButton>
+          <IconButton onClick={handleOpenFileDetails(file)}>
             <InfoRoundedIcon />
+          </IconButton>
+        </TableCell>
+        <TableCell variant="body" align="right">
+          <IconButton onClick={handleDownload(file.identifier)}>
+            <DownloadIcon />
           </IconButton>
         </TableCell>
       </TableRow>
@@ -90,7 +147,9 @@ function DirectoryDetails({
   if (rows.length < 1) {
     const emptyFileRow = (
       <TableRow>
-        <TableCell align="center" colSpan={4}>No files found in this directory</TableCell>
+        <TableCell align="center" colSpan={5}>
+          No files found in this directory
+        </TableCell>
       </TableRow>
     );
 
@@ -98,59 +157,104 @@ function DirectoryDetails({
   }
 
   return (
-    <Box sx={{ height: "100%", margin: "1em", marginRight: "2.5em" }}>
-      <Box
-        display={"flex"}
-        justifyContent={"space-between"}
-        marginTop={"1em"}
-        marginBottom={"1em"}
-      >
-        <Breadcrumbs
-          style={{
-            margin: "0.25em 0.25em 1em 0.25em",
-            padding: "0.5em",
-            alignItems: "center",
-          }}
-          separator={<NavigateNextRoundedIcon fontSize="small" />}
+    <React.Fragment>
+      <Box sx={{ height: "100%", margin: "1em", marginRight: "2.5em" }}>
+        <Box
+          display={"flex"}
+          justifyContent={"space-between"}
+          marginTop={"1em"}
+          marginBottom={"1em"}
         >
-          <FolderIcon />
-          <Link underline="hover" color="info">
-            {directoryName}
-          </Link>
-        </Breadcrumbs>
-        <Button variant="contained" onClick={handleAddFiles} size="small">
-          Add Files
-        </Button>
+          <Breadcrumbs
+            style={{
+              margin: "0.25em 0.25em 1em 0.25em",
+              padding: "0.5em",
+              alignItems: "center",
+            }}
+            separator={<NavigateNextRoundedIcon fontSize="small" />}
+          >
+            <FolderIcon />
+            <Link underline="hover" color="info">
+              {directoryName}
+            </Link>
+          </Breadcrumbs>
+          <Button variant="contained" onClick={handleAddFiles} size="small">
+            Add Files
+          </Button>
+        </Box>
+        <TableContainer component={Paper} elevation={2} variant="elevation">
+          <Table
+            style={{
+              height: "100%",
+            }}
+          >
+            <TableHead>
+              <TableRow>
+                <TableCell variant="head">File Name</TableCell>
+                <TableCell variant="head" align="right">
+                  Size
+                </TableCell>
+                <TableCell variant="head" align="right">
+                  Date Shared
+                </TableCell>
+                <TableCell variant="head" align="right">
+                  Details
+                </TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>{rows}</TableBody>
+            <TableFooter>
+              <TableRow>
+                <TableCell colSpan={5}></TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
+        </TableContainer>
       </Box>
-      <TableContainer component={Paper} elevation={2} variant="elevation">
-        <Table
-          style={{
-            height: "100%",
-          }}
-        >
-          <TableHead>
-            <TableRow>
-              <TableCell variant="head">File Name</TableCell>
-              <TableCell variant="head" align="right">
-                Size
-              </TableCell>
-              <TableCell variant="head" align="right">
-                Last Modified
-              </TableCell>
-              <TableCell variant="head" align="right">
-                Details
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>{rows}</TableBody>
-          <TableFooter>
-            <TableRow>
-              <TableCell colSpan={4}></TableCell>
-            </TableRow>
-          </TableFooter>
-        </Table>
-      </TableContainer>
-    </Box>
+      {fileDetails && (
+        <Dialog open={detailsOpen} onClose={handleCloseFileDetails}>
+          <div>
+            <DialogTitle>Details for {fileDetails.name}</DialogTitle>
+            <DialogContent>
+              {fileDetails.contentLocation &&
+                fileDetails.contentLocation.localPath && (
+                  <Box marginBottom={'1em'}>
+                    <Typography variant="caption" color={"GrayText"}>Local path:</Typography>
+                    <Typography variant="body1">
+                      {fileDetails.contentLocation.localPath}
+                    </Typography>
+                  </Box>
+                )}
+              {fileDetails.ownedPeers && fileDetails.ownedPeers.length > 0 && (
+                <div>
+                  <Typography variant="caption" color={"GrayText"}>Devices that have this file:</Typography>
+                  {fileDetails.ownedPeers.map((peer) => {
+                      return (
+                        <Typography key={peer.uuid}>
+                          {peer.hostname}
+                        </Typography>
+                      );
+                    })}
+                </div>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleCloseFileDetails}>Close</Button>
+              {fileDetails.contentLocation &&
+                fileDetails.contentLocation.localPath && (
+                  <Button
+                    onClick={handleDelete(fileDetails.identifier)}
+                    color="error"
+                  >
+                    <DeleteIcon />
+                  </Button>
+                )}
+            </DialogActions>
+          </div>
+        </Dialog>
+      )}
+    </React.Fragment>
   );
 }
 

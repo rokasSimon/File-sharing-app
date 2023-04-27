@@ -4,8 +4,8 @@ import { GetShareDirectories, invokeNetworkCommand } from "./networkCommands";
 import { v4, validate as validateUuid } from "uuid";
 
 type SerialisedShareDirectory = {
-  signature: ShareDirectorySignature,
-  shared_files: any
+  signature: ShareDirectorySignature;
+  shared_files: any;
 };
 
 type ShareDirectories = Array<ShareDirectory>;
@@ -27,11 +27,11 @@ type SharedFile = {
   identifier: string;
   contentHash: number;
   lastModified: string;
-  directoryPath: {
+  contentLocation: {
     localPath: string;
   };
   ownedPeers: Array<PeerId>;
-  size: number,
+  size: number;
 };
 
 type PeerId = {
@@ -75,7 +75,7 @@ function ShareDirectoryProvider({ children }: any) {
       );
     };
 
-    const startListenUpdate = async () => {
+    const startListenSync = async () => {
       const _ = await listen<Array<SerialisedShareDirectory>>(
         "UpdateShareDirectories",
         (event) => {
@@ -90,7 +90,7 @@ function ShareDirectoryProvider({ children }: any) {
 
             Object.keys(dir.shared_files).forEach((key) => {
               if (validateUuid(key)) {
-                fileMap.set(key, (dir.shared_files[key]) as SharedFile);
+                fileMap.set(key, dir.shared_files[key] as SharedFile);
               }
             });
 
@@ -102,54 +102,75 @@ function ShareDirectoryProvider({ children }: any) {
             return directory;
           });
 
-          console.log(
-            `Setting to ${JSON.stringify(
-              dirs
-            )}`
-          );
+          console.log(`Setting to ${JSON.stringify(dirs)}`);
 
           setDirectories(dirs);
         }
       );
     };
 
-    const startListenFileAdded = async () => {
-      const _ = await listen<AddedFiles>(
-        "AddedFiles",
-        (event) => {
-          const input = event.payload;
-          const directory = directoriesRef.current.find((dir) => {
-            console.log(`${dir.signature.identifier} === ${input.directoryIdentifier}`);
-            
-            return dir.signature.identifier === input.directoryIdentifier;
-          });
+    const startListenUpdateDirectory = async () => {
+      const _ = await listen<SerialisedShareDirectory>("UpdateDirectory", (event) => {
+        const input = event.payload;
+        const fileMap = new Map<string, SharedFile>();
 
-          if (directory) {
-            for (const file of input.sharedFiles) {
-              directory.shared_files.set(file.identifier, file);
-            }
+        Object.keys(input.shared_files).forEach((key) => {
+          if (validateUuid(key)) {
+            fileMap.set(key, (input.shared_files[key]) as SharedFile);
           }
+        });
 
-          const dirs = [
-            ...directoriesRef.current
-          ];
+        const directory = directoriesRef.current.find((dir) => {
+          dir.signature.identifier === input.signature.identifier
+        });
 
-          setDirectories(dirs);
+        if (directory) {
+          directory.signature = input.signature;
+          directory.shared_files = fileMap;
         }
-      );
+
+        setDirectories(directoriesRef.current);
+      });
     };
+
+    // const startListenFileAdded = async () => {
+    //   const _ = await listen<AddedFiles>(
+    //     "AddedFiles",
+    //     (event) => {
+    //       const input = event.payload;
+    //       const directory = directoriesRef.current.find((dir) => {
+    //         console.log(`${dir.signature.identifier} === ${input.directoryIdentifier}`);
+
+    //         return dir.signature.identifier === input.directoryIdentifier;
+    //       });
+
+    //       if (directory) {
+    //         for (const file of input.sharedFiles) {
+    //           directory.shared_files.set(file.identifier, file);
+    //         }
+    //       }
+
+    //       const dirs = [
+    //         ...directoriesRef.current
+    //       ];
+
+    //       setDirectories(dirs);
+    //     }
+    //   );
+    // };
 
     const loadDirectories = async () => {
       const request: GetShareDirectories = {
         getAllShareDirectoryData: false,
       };
 
-      await invokeNetworkCommand(request)
+      await invokeNetworkCommand(request);
     };
 
-    startListenUpdate();
+    startListenSync();
     startListenNewDir();
-    startListenFileAdded();
+    startListenUpdateDirectory();
+    //startListenFileAdded();
     loadDirectories();
 
     loaded.current = true;

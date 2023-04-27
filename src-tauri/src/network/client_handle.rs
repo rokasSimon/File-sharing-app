@@ -1,20 +1,16 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, net::IpAddr};
+use std::net::IpAddr;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use futures::{SinkExt, StreamExt};
-use mdns_sd::ServiceInfo;
-use tauri::async_runtime::JoinHandle;
 use tokio::{
-    net::{
-        tcp::{ReadHalf, WriteHalf},
-        TcpStream,
-    },
-    sync::{broadcast, mpsc},
+    net::{tcp::WriteHalf, TcpStream},
+    sync::mpsc,
 };
 use tokio_util::codec::{FramedRead, FramedWrite};
+use uuid::Uuid;
 
 use crate::{
-    data::{ShareDirectory, ShareDirectorySignature},
+    data::{ContentLocation, ShareDirectory, ShareDirectorySignature, SharedFile},
     network::server_handle::MessageToServer,
     peer_id::PeerId,
 };
@@ -32,6 +28,9 @@ pub enum MessageFromServer {
 
     SendDirectories(Vec<ShareDirectory>),
 
+    AddedFiles(ShareDirectorySignature, Vec<SharedFile>),
+    DeleteFile(PeerId, ShareDirectorySignature, Uuid),
+
     SharedDirectory(ShareDirectory),
 }
 
@@ -48,7 +47,11 @@ struct ClientDataHandle<'a> {
     client_peer_id: &'a mut Option<PeerId>,
 }
 
-pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream, mut client_peer_id: Option<PeerId>) {
+pub async fn client_loop(
+    mut client_data: ClientData,
+    mut stream: TcpStream,
+    mut client_peer_id: Option<PeerId>,
+) {
     let (read, write) = stream.split();
 
     let mut framed_reader = FramedRead::new(read, MessageCodec {});
@@ -92,27 +95,6 @@ pub async fn client_loop(mut client_data: ClientData, mut stream: TcpStream, mut
                     }
                 }
             }
-
-            // server_message = handle.client_data.broadcast_receiver.recv() => {
-            //     match server_message {
-            //         Ok(message_from_server) => {
-            //             let result = handle_server_messages(message_from_server, &mut handle).await;
-
-            //             if let Err(e) = result {
-            //                 error!("{}", e);
-
-            //                 disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
-            //                 return;
-            //             }
-            //         },
-            //         Err(e) => {
-            //             error!("{}", e);
-
-            //             disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
-            //             return;
-            //         }
-            //     }
-            // }
 
         }
     }
@@ -181,12 +163,7 @@ async fn handle_tcp_message<'a>(
                 }
             };
 
-            let _ = data
-                .client_data
-                .server
-                .channel
-                .send(msg)
-                .await?;
+            let _ = data.client_data.server.channel.send(msg).await?;
 
             Ok(())
         }
@@ -212,7 +189,7 @@ async fn handle_tcp_message<'a>(
                 None => {
                     warn!("Client Peer Id not yet set");
 
-                    return Ok(())
+                    return Ok(());
                 }
             };
 
@@ -232,6 +209,50 @@ async fn handle_tcp_message<'a>(
 
             Ok(())
         }
+
+        TcpMessage::AddedFiles { directory, files } => {
+            info!("Received add request for files {:?}", files);
+
+            let mut directories = data.client_data.server.config.cached_data.lock().await;
+            let dir = directories.get_mut(&directory.identifier);
+
+            if let Some(dir) = dir {
+                dir.add_files(files, dir.signature.last_modified);
+
+                let _ = data
+                    .client_data
+                    .server
+                    .channel
+                    .send(MessageToServer::UpdatedDirectory(dir.signature.identifier))
+                    .await?;
+            }
+
+            Ok(())
+        }
+
+        TcpMessage::DeleteFile {
+            peer_id,
+            directory,
+            file,
+        } => {
+            info!("Received delete request for file {}", file);
+
+            let mut directories = data.client_data.server.config.cached_data.lock().await;
+            let dir = directories.get_mut(&directory.identifier);
+
+            if let Some(dir) = dir {
+                dir.delete_files(peer_id, directory.last_modified, vec![file]);
+
+                let _ = data
+                    .client_data
+                    .server
+                    .channel
+                    .send(MessageToServer::UpdatedDirectory(dir.signature.identifier))
+                    .await?;
+            }
+
+            Ok(())
+        }
     }
 }
 
@@ -246,7 +267,11 @@ async fn handle_server_messages(
             Ok(())
         }
 
-        MessageFromServer::SharedDirectory(directory) => {
+        MessageFromServer::SharedDirectory(mut directory) => {
+            for (_, file) in directory.shared_files.iter_mut() {
+                file.content_location = ContentLocation::NetworkOnly;
+            }
+
             data.tcp_write
                 .send(TcpMessage::SharedDirectory(directory))
                 .await?;
@@ -254,7 +279,13 @@ async fn handle_server_messages(
             Ok(())
         }
 
-        MessageFromServer::SendDirectories(directories) => {
+        MessageFromServer::SendDirectories(mut directories) => {
+            for dir in directories.iter_mut() {
+                for (_, file) in dir.shared_files.iter_mut() {
+                    file.content_location = ContentLocation::NetworkOnly;
+                }
+            }
+
             data.tcp_write
                 .send(TcpMessage::SendDirectories(directories))
                 .await?;
@@ -263,8 +294,30 @@ async fn handle_server_messages(
         }
 
         MessageFromServer::Synchronize => {
+            data.tcp_write.send(TcpMessage::Synchronize).await?;
+
+            Ok(())
+        }
+
+        MessageFromServer::DeleteFile(peer_id, directory, file) => {
             data.tcp_write
-                .send(TcpMessage::Synchronize)
+                .send(TcpMessage::DeleteFile {
+                    peer_id,
+                    directory,
+                    file,
+                })
+                .await?;
+
+            Ok(())
+        }
+
+        MessageFromServer::AddedFiles(directory, mut files) => {
+            for file in files.iter_mut() {
+                file.content_location = ContentLocation::NetworkOnly;
+            }
+
+            data.tcp_write
+                .send(TcpMessage::AddedFiles { directory, files })
                 .await?;
 
             Ok(())

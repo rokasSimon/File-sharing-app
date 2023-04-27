@@ -122,24 +122,6 @@ function Directories() {
     setOptAnchorEl(null);
   };
 
-  // const sharePeers = peers.map((peer) => {
-  //   if (optDirectory) {
-  //     const matchedPeer = optDirectory.signature.sharedPeers.find(
-  //       (p) => p.uuid === peer.uuid
-  //     );
-  //     const result: SharePeer = {
-  //       peer,
-  //       sharedBefore: matchedPeer != undefined,
-  //       checked: matchedPeer != undefined,
-  //     };
-
-  //     return result;
-  //   }
-
-  //   return undefined;
-  // });
-  // const [checkedPeers, setCheckedPeers] = React.useState(sharePeers);
-
   const handleShareToggle = (value: string) => () => {
     if (sharePeers) {
       const newCheckedPeers = [...sharePeers];
@@ -154,11 +136,7 @@ function Directories() {
     }
   };
 
-  let peerList: JSX.Element | JSX.Element[] = (
-    <ListItem>
-      <ListItemText>No peers connected</ListItemText>
-    </ListItem>
-  );
+  let peerList: JSX.Element | JSX.Element[] = [];
   if (sharePeers) {
     peerList = sharePeers.map((p) => {
       return (
@@ -176,6 +154,14 @@ function Directories() {
         </ListItem>
       );
     });
+  }
+
+  if (peerList.length == 0) {
+    peerList = (
+      <ListItem>
+        <ListItemText>No peers connected</ListItemText>
+      </ListItem>
+    );
   }
 
   const handleShareOpen = (directoryIdentifier: string) => {

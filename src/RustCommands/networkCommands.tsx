@@ -27,6 +27,14 @@ interface ShareDirectoryToPeers extends BackendCommand {
     },
 }
 
+interface DownloadFile extends BackendCommand {
+    fileIdentifier: string
+}
+
+interface DeleteFile extends BackendCommand {
+    fileIdentifier: string
+}
+
 async function invokeBackendCommand(command: BackendCommand): Promise<any> {
     console.log(JSON.stringify(command));
     const result = await invoke('network_command', {
@@ -36,5 +44,5 @@ async function invokeBackendCommand(command: BackendCommand): Promise<any> {
     return result;
 }
 
-export type { CreateShareDirectory, GetShareDirectories, AddFiles, ShareDirectoryToPeers };
+export type { CreateShareDirectory, GetShareDirectories, AddFiles, ShareDirectoryToPeers, DownloadFile, DeleteFile };
 export { invokeBackendCommand as invokeNetworkCommand };

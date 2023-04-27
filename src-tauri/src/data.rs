@@ -15,6 +15,42 @@ pub struct ShareDirectory {
     pub shared_files: HashMap<Uuid, SharedFile>,
 }
 
+impl ShareDirectory {
+    pub fn add_files(&mut self, files: Vec<SharedFile>, date_modified: DateTime<Utc>) {
+        for file in files {
+            self.shared_files.insert(file.identifier, file);
+        }
+
+        self.signature.last_modified = date_modified;
+    }
+
+    pub fn delete_files(
+        &mut self,
+        peer_id: PeerId,
+        date_modified: DateTime<Utc>,
+        file_ids: Vec<Uuid>,
+    ) {
+        self.signature.last_modified = date_modified;
+
+        for file_id in file_ids {
+            let some_file = self.shared_files.get_mut(&file_id);
+
+            let should_delete_fully = match some_file {
+                Some(file) => {
+                    file.owned_peers.retain(|peer| peer != &peer_id);
+
+                    file.owned_peers.len() == 0
+                }
+                None => false,
+            };
+
+            if should_delete_fully {
+                self.shared_files.remove(&file_id);
+            }
+        }
+    }
+}
+
 impl Clone for ShareDirectory {
     fn clone(&self) -> Self {
         let mut shared_files = HashMap::with_capacity(self.shared_files.len());
