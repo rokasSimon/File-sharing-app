@@ -85,6 +85,7 @@ struct ServerData<'a> {
 pub enum WindowRequest {
     CreateShareDirectory(String),
     GetAllShareDirectoryData(bool),
+    GetPeers(bool),
     AddFiles {
         directory_identifier: String,
         file_paths: Vec<String>,
@@ -377,6 +378,19 @@ async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>)
                 MAIN_WINDOW_LABEL,
                 "NewShareDirectory",
                 signature,
+            );
+
+            Ok(())
+        }
+
+        WindowRequest::GetPeers(_) => {
+            let clients = server_data.clients.lock().await;
+
+            let ids: Vec<PeerId> = clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
+            let _ = server_data.window_manager.emit_to(
+                MAIN_WINDOW_LABEL,
+                "GetPeers",
+                ids,
             );
 
             Ok(())

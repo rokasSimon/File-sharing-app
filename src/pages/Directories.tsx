@@ -21,17 +21,32 @@ import {
   TextField,
   Typography,
   MenuItem,
+  DialogContentText,
+  Checkbox,
+  ListItemIcon,
 } from "@mui/material";
 import {
   CreateShareDirectory,
+  ShareDirectoryToPeers,
   invokeNetworkCommand,
 } from "../RustCommands/networkCommands";
 import {
+  PeerId,
   ShareDirectory,
   ShareDirectoryContext,
   SharedFile,
 } from "../RustCommands/ShareDirectoryContext";
 import DirectoryDetails from "../Components/DirectoryDetails";
+import {
+  ConnectedDevicesContext,
+  GetPeers,
+} from "../RustCommands/ConnectedDevicesContext";
+
+type SharePeer = {
+  peer: PeerId;
+  sharedBefore: boolean;
+  checked: boolean;
+};
 
 function Directories() {
   const shareDirectories = React.useContext(ShareDirectoryContext);
@@ -41,6 +56,9 @@ function Directories() {
   const [shareCreationName, setShareCreationName] = React.useState("");
   const [shareCreationOpen, setShareCreationOpen] = React.useState(false);
 
+  const peers = React.useContext(ConnectedDevicesContext);
+
+  const [sharePeers, setSharePeers] = React.useState<SharePeer[] | null>(null);
   const [optDirectory, setOptDirectory] = React.useState<
     ShareDirectory | undefined
   >(undefined);
@@ -49,11 +67,14 @@ function Directories() {
   );
   const optOpen = Boolean(optAnchorEl);
 
-  const handleOpen = () => {
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [removeOpen, setRemoveOpen] = React.useState(false);
+
+  const handleOpenCreate = () => {
     setShareCreationName("");
     setShareCreationOpen(true);
   };
-  const handleClose = () => {
+  const handleCloseCreate = () => {
     setShareCreationName("");
     setShareCreationOpen(false);
   };
@@ -73,7 +94,7 @@ function Directories() {
       console.log(e);
     }
 
-    handleClose();
+    handleCloseCreate();
   };
 
   const handleListClick = async (identifier: string) => {
@@ -101,7 +122,135 @@ function Directories() {
     setOptAnchorEl(null);
   };
 
-  const handleShare = async () => {};
+  // const sharePeers = peers.map((peer) => {
+  //   if (optDirectory) {
+  //     const matchedPeer = optDirectory.signature.sharedPeers.find(
+  //       (p) => p.uuid === peer.uuid
+  //     );
+  //     const result: SharePeer = {
+  //       peer,
+  //       sharedBefore: matchedPeer != undefined,
+  //       checked: matchedPeer != undefined,
+  //     };
+
+  //     return result;
+  //   }
+
+  //   return undefined;
+  // });
+  // const [checkedPeers, setCheckedPeers] = React.useState(sharePeers);
+
+  const handleShareToggle = (value: string) => () => {
+    if (sharePeers) {
+      const newCheckedPeers = [...sharePeers];
+
+      for (const p of newCheckedPeers) {
+        if (p && p.peer.uuid === value && p.sharedBefore != true) {
+          p.checked = !p.checked;
+        }
+      }
+
+      setSharePeers(newCheckedPeers);
+    }
+  };
+
+  let peerList: JSX.Element | JSX.Element[] = (
+    <ListItem>
+      <ListItemText>No peers connected</ListItemText>
+    </ListItem>
+  );
+  if (sharePeers) {
+    peerList = sharePeers.map((p) => {
+      return (
+        <ListItem key={p.peer.uuid}>
+          <ListItemButton onClick={handleShareToggle(p.peer.uuid)}>
+            <ListItemIcon>
+              <Checkbox
+                edge="end"
+                checked={p.checked}
+                readOnly={p.sharedBefore}
+              />
+            </ListItemIcon>
+            <ListItemText primary={p.peer.hostname} />
+          </ListItemButton>
+        </ListItem>
+      );
+    });
+  }
+
+  const handleShareOpen = (directoryIdentifier: string) => {
+    handleDirectoryOptionsClose();
+
+    const dir = shareDirectories.find(
+      (d) => d.signature.identifier === directoryIdentifier
+    );
+    if (!dir) return;
+
+    const request: GetPeers = {
+      getPeers: true,
+    };
+
+    invokeNetworkCommand(request).then(() => {
+      setOptDirectory(dir);
+      setShareOpen(true);
+
+      const newSharePeers = peers.map((peer) => {
+        const matchedPeer = dir.signature.sharedPeers.find(
+          (p) => p.uuid === peer.uuid
+        );
+        const result: SharePeer = {
+          peer,
+          sharedBefore: matchedPeer != undefined,
+          checked: matchedPeer != undefined,
+        };
+
+        return result;
+      });
+
+      setSharePeers(newSharePeers);
+    });
+  };
+
+  const handleShareClose = () => {
+    setOptDirectory(undefined);
+    setShareOpen(false);
+  };
+
+  const handleShare = async () => {
+    if (!optDirectory || !sharePeers) return;
+
+    const peersToShareTo = sharePeers.filter((peer) => {
+      return peer.checked && !peer.sharedBefore;
+    }).map((peer) => peer.peer);
+
+    const request: ShareDirectoryToPeers = {
+      shareDirectoryToPeers: {
+        directory_identifier: optDirectory.signature.identifier,
+        peers: peersToShareTo
+      }
+    };
+
+    await invokeNetworkCommand(request);
+
+    handleShareClose();
+  };
+
+  const handleRemoveOpen = (directoryIdentifier: string) => {
+    handleDirectoryOptionsClose();
+
+    const dir = shareDirectories.find(
+      (d) => d.signature.identifier === directoryIdentifier
+    );
+    if (!dir) return;
+
+    setOptDirectory(dir);
+    setRemoveOpen(true);
+  };
+
+  const handleRemoveClose = () => {
+    setOptDirectory(undefined);
+    setRemoveOpen(false);
+  };
 
   const handleRemove = async () => {};
 
@@ -134,10 +283,6 @@ function Directories() {
         >
           <ListItemButton
             style={{ maxHeight: "3em" }}
-            // selected={
-            //   selectedDirectory?.signature?.identifier ===
-            //   val.signature.identifier
-            // }
             onClick={() => handleListClick(val.signature.identifier)}
           >
             <ListItemText>
@@ -154,8 +299,16 @@ function Directories() {
               open={optOpen}
               onClose={handleDirectoryOptionsClose}
             >
-              <MenuItem onClick={handleRemove}>Remove</MenuItem>
-              <MenuItem onClick={handleShare}>Share</MenuItem>
+              <MenuItem
+                onClick={() => handleRemoveOpen(val.signature.identifier)}
+              >
+                Remove
+              </MenuItem>
+              <MenuItem
+                onClick={() => handleShareOpen(val.signature.identifier)}
+              >
+                Share
+              </MenuItem>
             </MaterialMenu>
           </ListItemButton>
         </ListItem>
@@ -167,7 +320,7 @@ function Directories() {
     <div id="directory-column">
       <div id="start-button-box">
         <Button
-          onClick={handleOpen}
+          onClick={handleOpenCreate}
           variant="contained"
           id="start-share-directory-btn"
         >
@@ -196,7 +349,8 @@ function Directories() {
           maxWidth={"80vw"}
         />
       </div>
-      <Dialog open={shareCreationOpen} onClose={handleClose}>
+
+      <Dialog open={shareCreationOpen} onClose={handleCloseCreate}>
         <div>
           <DialogTitle>Creating New Share Directory</DialogTitle>
           <DialogContent>
@@ -209,8 +363,37 @@ function Directories() {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleClose}>Cancel</Button>
+            <Button onClick={handleCloseCreate}>Cancel</Button>
             <Button onClick={handleCreate}>Create</Button>
+          </DialogActions>
+        </div>
+      </Dialog>
+
+      <Dialog open={shareOpen} onClose={handleShareClose}>
+        <div>
+          <DialogTitle>Directory Sharing</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Select connected devices to reveal directory to.
+            </DialogContentText>
+            <List>{peerList}</List>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleShareClose}>Cancel</Button>
+            <Button onClick={handleShare}>Share</Button>
+          </DialogActions>
+        </div>
+      </Dialog>
+
+      <Dialog open={removeOpen} onClose={handleRemoveClose}>
+        <div>
+          <DialogTitle>Directory Removal</DialogTitle>
+          <DialogContent>
+
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleRemoveClose}>Cancel</Button>
+            <Button onClick={handleRemove}>Remove</Button>
           </DialogActions>
         </div>
       </Dialog>

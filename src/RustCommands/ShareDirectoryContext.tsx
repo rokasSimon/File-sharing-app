@@ -85,22 +85,6 @@ function ShareDirectoryProvider({ children }: any) {
             )} from rust in UpdateShareDirectories`
           );
           const input = event.payload;
-
-          // let sharedFileMaps = [];
-          // for (const dir of input) {
-          //   console.log(`Iterating over ${dir.signature}`);
-          //   const fileMap = new Map<string, SharedFile>();
-
-            // Object.keys(dir.shared_files).forEach((key) => {
-            //   if (validateUuid(key)) {
-            //     console.log(`Iterating over ${key} with data ${JSON.stringify(dir.shared_files[key])}`);
-            //     fileMap.set(key, (dir.shared_files[key]) as SharedFile);
-            //   }
-            // });
-
-          //   sharedFileMaps.push(fileMap);
-          // }
-
           const dirs = input.map((dir) => {
             const fileMap = new Map<string, SharedFile>();
 
@@ -159,9 +143,8 @@ function ShareDirectoryProvider({ children }: any) {
       const request: GetShareDirectories = {
         getAllShareDirectoryData: false,
       };
-      const data = (await invokeNetworkCommand(request)) as ShareDirectories;
 
-      setDirectories(data);
+      await invokeNetworkCommand(request)
     };
 
     startListenUpdate();
