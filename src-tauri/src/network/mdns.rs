@@ -14,7 +14,7 @@ use crate::peer_id::PeerId;
 use super::server_handle::{MessageToServer, ServerHandle};
 
 pub const SERVICE_TYPE: &str = "_ktu_fileshare._tcp.local.";
-pub const MDNS_UPDATE_TIME: u64 = 120;
+pub const MDNS_UPDATE_TIME: u64 = 15;
 pub const RECONNECT_TIME: i64 = 15;
 
 const MDNS_PORT: u16 = 61000;
