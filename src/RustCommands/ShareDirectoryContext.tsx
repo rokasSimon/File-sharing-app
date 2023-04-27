@@ -121,7 +121,7 @@ function ShareDirectoryProvider({ children }: any) {
         });
 
         const directory = directoriesRef.current.find((dir) => {
-          dir.signature.identifier === input.signature.identifier
+          return dir.signature.identifier === input.signature.identifier;
         });
 
         if (directory) {
