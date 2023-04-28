@@ -1,0 +1,87 @@
+Date : 2023-04-28 20:52:45
+Directory : e:\DEV\Rust\file-sharing-app
+Total : 41 files,  33792 codes, 62 comments, 686 blanks, all 34540 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| JSON               |          4 |     30,458 |          0 |          3 |     30,461 |
+| Rust               |         12 |      1,809 |          1 |        403 |      2,213 |
+| TypeScript JSX     |         11 |      1,219 |         28 |        210 |      1,457 |
+| CSS                |          5 |        179 |          0 |         37 |        216 |
+| TOML               |          1 |         38 |          5 |          5 |         48 |
+| JSON with Comments |          1 |         26 |          0 |          1 |         27 |
+| Markdown           |          1 |         26 |          0 |         21 |         47 |
+| HTML               |          1 |         20 |         23 |          1 |         44 |
+| TypeScript         |          3 |         14 |          5 |          5 |         24 |
+| PowerShell         |          1 |          2 |          0 |          0 |          2 |
+| XML                |          1 |          1 |          0 |          0 |          1 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++---------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                      | files      | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                         |         41 |     33,792 |         62 |        686 |     34,540 |
+| . (Files)                                                                 |          5 |     30,380 |          0 |         24 |     30,404 |
+| public                                                                    |          2 |         45 |         23 |          2 |         70 |
+| src                                                                       |         20 |      1,413 |         33 |        252 |      1,698 |
+| src (Files)                                                               |          9 |        230 |          8 |         51 |        289 |
+| src-tauri                                                                 |         14 |      1,954 |          6 |        408 |      2,368 |
+| src-tauri (Files)                                                         |          3 |        148 |          5 |          6 |        159 |
+| src-tauri\src                                                             |         11 |      1,806 |          1 |        402 |      2,209 |
+| src-tauri\src (Files)                                                     |          6 |        384 |          0 |         90 |        474 |
+| src-tauri\src\network                                                     |          5 |      1,422 |          1 |        312 |      1,735 |
+| src\Components                                                            |          5 |        423 |          0 |         52 |        475 |
+| src\RustCommands                                                          |          4 |        343 |         25 |         87 |        455 |
+| src\pages                                                                 |          2 |        417 |          0 |         62 |        479 |
++---------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++---------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                                  | language           | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| e:\DEV\Rust\file-sharing-app\README.md                                    | Markdown           |         26 |          0 |         21 |         47 |
+| e:\DEV\Rust\file-sharing-app\launch.ps1                                   | PowerShell         |          2 |          0 |          0 |          2 |
+| e:\DEV\Rust\file-sharing-app\package-lock.json                            | JSON               |     30,267 |          0 |          1 |     30,268 |
+| e:\DEV\Rust\file-sharing-app\package.json                                 | JSON               |         59 |          0 |          1 |         60 |
+| e:\DEV\Rust\file-sharing-app\public\index.html                            | HTML               |         20 |         23 |          1 |         44 |
+| e:\DEV\Rust\file-sharing-app\public\manifest.json                         | JSON               |         25 |          0 |          1 |         26 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\Cargo.toml                         | TOML               |         38 |          5 |          5 |         48 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\build.rs                           | Rust               |          3 |          0 |          1 |          4 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\config.rs                      | Rust               |         99 |          0 |         25 |        124 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\data.rs                        | Rust               |         77 |          0 |         16 |         93 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\main.rs                        | Rust               |        102 |          0 |         21 |        123 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network.rs                     | Rust               |         45 |          0 |         10 |         55 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\client_handle.rs       | Rust               |        411 |          0 |        101 |        512 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec.rs               | Rust               |        106 |          1 |         33 |        140 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\mdns.rs                | Rust               |        152 |          0 |         30 |        182 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server_handle.rs       | Rust               |        734 |          0 |        141 |        875 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\tcp_listener.rs        | Rust               |         19 |          0 |          7 |         26 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\peer_id.rs                     | Rust               |         44 |          0 |         12 |         56 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\window.rs                      | Rust               |         17 |          0 |          6 |         23 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\tauri.conf.json                    | JSON               |        107 |          0 |          0 |        107 |
+| e:\DEV\Rust\file-sharing-app\src\App.css                                  | CSS                |         49 |          0 |         13 |         62 |
+| e:\DEV\Rust\file-sharing-app\src\App.test.tsx                             | TypeScript JSX     |          8 |          0 |          2 |         10 |
+| e:\DEV\Rust\file-sharing-app\src\App.tsx                                  | TypeScript JSX     |         97 |          0 |         18 |        115 |
+| e:\DEV\Rust\file-sharing-app\src\Components\DirectoryDetails.tsx          | TypeScript JSX     |        262 |          0 |         30 |        292 |
+| e:\DEV\Rust\file-sharing-app\src\Components\Menu.css                      | CSS                |         15 |          0 |          2 |         17 |
+| e:\DEV\Rust\file-sharing-app\src\Components\Menu.tsx                      | TypeScript JSX     |         56 |          0 |          6 |         62 |
+| e:\DEV\Rust\file-sharing-app\src\Components\ResizableBox.css              | CSS                |         39 |          0 |          6 |         45 |
+| e:\DEV\Rust\file-sharing-app\src\Components\ResizableBox.tsx              | TypeScript JSX     |         51 |          0 |          8 |         59 |
+| e:\DEV\Rust\file-sharing-app\src\RustCommands\ConnectedDevicesContext.tsx | TypeScript JSX     |         45 |          0 |         14 |         59 |
+| e:\DEV\Rust\file-sharing-app\src\RustCommands\DownloadsManager.tsx        | TypeScript JSX     |        108 |          4 |         22 |        134 |
+| e:\DEV\Rust\file-sharing-app\src\RustCommands\ShareDirectoryContext.tsx   | TypeScript JSX     |        142 |         21 |         39 |        202 |
+| e:\DEV\Rust\file-sharing-app\src\RustCommands\networkCommands.tsx         | TypeScript JSX     |         48 |          0 |         12 |         60 |
+| e:\DEV\Rust\file-sharing-app\src\index.css                                | CSS                |         28 |          0 |          6 |         34 |
+| e:\DEV\Rust\file-sharing-app\src\index.tsx                                | TypeScript JSX     |         33 |          3 |          7 |         43 |
+| e:\DEV\Rust\file-sharing-app\src\logo.svg                                 | XML                |          1 |          0 |          0 |          1 |
+| e:\DEV\Rust\file-sharing-app\src\pages\Directories.css                    | CSS                |         48 |          0 |         10 |         58 |
+| e:\DEV\Rust\file-sharing-app\src\pages\Directories.tsx                    | TypeScript JSX     |        369 |          0 |         52 |        421 |
+| e:\DEV\Rust\file-sharing-app\src\react-app-env.d.ts                       | TypeScript         |          0 |          1 |          1 |          2 |
+| e:\DEV\Rust\file-sharing-app\src\reportWebVitals.ts                       | TypeScript         |         13 |          0 |          3 |         16 |
+| e:\DEV\Rust\file-sharing-app\src\setupTests.ts                            | TypeScript         |          1 |          4 |          1 |          6 |
+| e:\DEV\Rust\file-sharing-app\tsconfig.json                                | JSON with Comments |         26 |          0 |          1 |         27 |
+| Total                                                                     |                    |     33,792 |         62 |        686 |     34,540 |
++---------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+

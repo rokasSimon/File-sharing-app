@@ -9,10 +9,18 @@ import { appWindow } from "@tauri-apps/api/window";
 import Menu from "./Components/Menu";
 
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { PaletteMode, Paper, ThemeOptions } from "@mui/material";
+import { PaletteMode, Paper } from "@mui/material";
 import { Outlet } from "react-router-dom";
 import { ShareDirectoryProvider } from "./RustCommands/ShareDirectoryContext";
 import { ConnectedDevicesProvider } from "./RustCommands/ConnectedDevicesContext";
+import { DownloadsManager } from "./RustCommands/DownloadsManager";
+import { listen } from "@tauri-apps/api/event";
+import { message } from '@tauri-apps/api/dialog';
+
+type BackendError = {
+  title: string;
+  error: string;
+};
 
 const ThemeContext = React.createContext({ toggleTheme: () => {} });
 
@@ -34,6 +42,23 @@ function App() {
   };
 
   const theme = React.useMemo(() => createTheme(getDesignTokens(mode)), [mode]);
+  const loaded = React.useRef(false);
+
+  React.useEffect(() => {
+    if (loaded.current) return;
+
+    const startListenErrors = async () => {
+      const _ = await listen<BackendError>("Error", async (event) => {
+        const input = event.payload;
+
+        await message(input.error, { title: input.title, type: 'error' });
+      });
+    };
+
+    startListenErrors();
+
+    loaded.current = true;
+  }, []);
 
   return (
     <ThemeContext.Provider value={toggleTheme}>
@@ -74,7 +99,9 @@ function App() {
                   borderRadius: 0,
                 }}
               >
-                <Outlet />
+                <DownloadsManager>
+                  <Outlet />
+                </DownloadsManager>
               </Paper>
             </div>
           </ShareDirectoryProvider>

@@ -36,6 +36,7 @@ chrono = { version = "0.4.24", features = ["serde"] }
 bytes = { version = "1.4.0", features = ["serde"] }
 postcard = { version = "1.0.4", features = ["use-std"] }
 if-addrs = "0.10.1"
+opener = "0.6.1"
 
 [features]
 # by default Tauri runs in production mode

@@ -12,19 +12,25 @@ use crate::{data::ShareDirectory, peer_id::PeerId};
 const APP_FILES_LOCATION: &str = "fileshare";
 const APP_CONFIG_LOCATION: &str = "config.json";
 const APP_CACHE_LOCATION: &str = "cached_files.json";
+const DEFAULT_DOWNLOAD_LOCATION: &str = "downloads";
 
 pub fn load_stored_data() -> StoredConfig {
     let app_dir =
         AppDirs::new(Some(APP_FILES_LOCATION), false).expect("to be able to create config files");
 
     let config_path = ensure_path(app_dir.config_dir, APP_CONFIG_LOCATION);
-    let cache_path = ensure_path(app_dir.cache_dir, APP_CACHE_LOCATION);
+    let cache_path = ensure_path(app_dir.data_dir, APP_CACHE_LOCATION);
+    let download_path = ensure_path(app_dir.data_dir, DEFAULT_DOWNLOAD_LOCATION);
 
     let config_str = fs::read_to_string(&config_path).expect("to be able to read the config file");
     let mut config: AppConfig = serde_json::from_str(&config_str).unwrap_or_default();
 
     if config.peer_id.is_none() {
         config.peer_id = Some(PeerId::generate());
+    }
+
+    if !config.download_directory.exists() {
+        config.download_directory = download_path;
     }
 
     let cache_str = fs::read_to_string(&cache_path).expect("to be able to read cache file");
@@ -38,7 +44,7 @@ pub fn write_stored_data(stored_config: &StoredConfig) {
         AppDirs::new(Some(APP_FILES_LOCATION), false).expect("to be able to create config files");
 
     let config_path = app_dir.config_dir.join(APP_CONFIG_LOCATION);
-    let cache_path = app_dir.cache_dir.join(APP_CACHE_LOCATION);
+    let cache_path = app_dir.data_dir.join(APP_CACHE_LOCATION);
 
     let config_bytes = serde_json::to_vec_pretty(&*stored_config.app_config.blocking_lock());
     let cache_bytes = serde_json::to_vec_pretty(&*stored_config.cached_data.blocking_lock());
@@ -89,6 +95,7 @@ where
 pub struct AppConfig {
     pub peer_id: Option<PeerId>,
     pub hide_on_close: bool,
+    pub download_directory: PathBuf,
 }
 
 impl Default for AppConfig {
@@ -96,6 +103,7 @@ impl Default for AppConfig {
         Self {
             peer_id: None,
             hide_on_close: false,
+            download_directory: PathBuf::new(),
         }
     }
 }

@@ -6,6 +6,8 @@ use uuid::Uuid;
 
 use crate::{peer_id::PeerId, data::{ShareDirectorySignature, ShareDirectory, SharedFile}};
 
+use super::client_handle::DownloadError;
+
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 100; // 100 MB
 const LENGTH_MARKER_SIZE: usize = 4;
 
@@ -26,6 +28,27 @@ pub enum TcpMessage {
     AddedFiles {
         directory: ShareDirectorySignature,
         files: Vec<SharedFile>
+    },
+
+    StartDownload {
+        download_id: Uuid,
+        file_id: Uuid,
+        dir_id: Uuid,
+    },
+
+    SendFilePart {
+        download_id: Uuid,
+        data: Vec<u8>
+    },
+
+    SendFileEnd {
+        download_id: Uuid,
+        data: Vec<u8>
+    },
+
+    DownloadError {
+        error: DownloadError,
+        download_id: Uuid,
     },
 
     SharedDirectory(ShareDirectory),

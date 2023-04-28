@@ -29,6 +29,7 @@ import NavigateNextRoundedIcon from "@mui/icons-material/NavigateNextRounded";
 import FolderIcon from "@mui/icons-material/Folder";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
+import DownloadDoneIcon from "@mui/icons-material/DownloadDone";
 import { SharedFile } from "../RustCommands/ShareDirectoryContext";
 
 import { open } from "@tauri-apps/api/dialog";
@@ -39,6 +40,7 @@ import {
   invokeNetworkCommand,
 } from "../RustCommands/networkCommands";
 import React from "react";
+import { invoke } from "@tauri-apps/api";
 
 type DirectoryDetailsProps = {
   files: Map<string, SharedFile>;
@@ -91,7 +93,7 @@ function DirectoryDetails({
     setFileDetails(null);
   };
 
-  const handleDownload = (fileId: string) => () => {
+  const handleDownload = (fileId: string) => async () => {
     const file = files.get(fileId);
 
     if (!file) return;
@@ -102,6 +104,8 @@ function DirectoryDetails({
         directory_identifier: directoryIdentifier,
       },
     };
+
+    await invokeNetworkCommand(request);
   };
 
   const handleDelete = (fileId: string) => () => {
@@ -121,8 +125,30 @@ function DirectoryDetails({
     });
   };
 
+  const handleOpenFile = (file: SharedFile) => async () => {
+    if (file.contentLocation.localPath) {
+      const result = await invoke("open_file", {
+        message: {
+          file_path: file.contentLocation.localPath
+        },
+      });
+
+      console.error(result);
+    }
+  };
+
   let rows = [];
   for (const [id, file] of files.entries()) {
+    const downloadButton = file?.contentLocation?.localPath ? (
+      <IconButton onClick={handleOpenFile(file)}>
+        <DownloadDoneIcon />
+      </IconButton>
+    ) : (
+      <IconButton onClick={handleDownload(file.identifier)}>
+        <DownloadIcon />
+      </IconButton>
+    );
+
     const row = (
       <TableRow key={id}>
         <TableCell variant="body">{file.name}</TableCell>
@@ -138,9 +164,7 @@ function DirectoryDetails({
           </IconButton>
         </TableCell>
         <TableCell variant="body" align="right">
-          <IconButton onClick={handleDownload(file.identifier)}>
-            <DownloadIcon />
-          </IconButton>
+          {downloadButton}
         </TableCell>
       </TableRow>
     );

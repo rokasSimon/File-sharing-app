@@ -41,6 +41,12 @@ interface DeleteFile extends BackendCommand {
     }
 }
 
+interface CancelDownload extends BackendCommand {
+    cancelDownload: {
+        download_identifier: string,
+    }
+}
+
 async function invokeBackendCommand(command: BackendCommand): Promise<any> {
     console.log(JSON.stringify(command));
     const result = await invoke('network_command', {
@@ -50,5 +56,5 @@ async function invokeBackendCommand(command: BackendCommand): Promise<any> {
     return result;
 }
 
-export type { CreateShareDirectory, GetShareDirectories, AddFiles, ShareDirectoryToPeers, DownloadFile, DeleteFile };
+export type { CreateShareDirectory, GetShareDirectories, AddFiles, ShareDirectoryToPeers, DownloadFile, DeleteFile, CancelDownload };
 export { invokeBackendCommand as invokeNetworkCommand };

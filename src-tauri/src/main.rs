@@ -32,7 +32,7 @@ use network::{
 };
 
 use crate::{
-    config::{load_stored_data, write_stored_data}, network::server_handle::WindowRequest
+    config::{load_stored_data, write_stored_data}, network::server_handle::WindowRequest, window::open_file
 };
 
 const THREAD_CHANNEL_SIZE: usize = 64;
@@ -83,7 +83,7 @@ fn main() {
             }
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![network_command])
+        .invoke_handler(tauri::generate_handler![network_command, open_file])
         .setup(move |app| {
             let window = app.get_window("main").expect("To find main window");
 
