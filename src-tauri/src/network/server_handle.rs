@@ -355,20 +355,6 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                                     let mut files_to_delete = vec![];
                                     for (file_id, file) in matched_dir.shared_files.iter_mut() {
-                                        // match dir.shared_files.get(file_id) {
-                                        //     None => {
-                                        //         if file.owned_peers.len() == 1 && file.owned_peers.contains(myself) {
-                                        //             files_to_delete.push(file_id.clone());
-                                        //         }
-                                        //     },
-                                        //     Some(matched_file) => {
-                                        //         file.owned_peers = matched_file.owned_peers.clone();
-
-                                        //         if !file.owned_peers.contains(myself) {
-                                        //             file.owned_peers.push(myself.clone());
-                                        //         }
-                                        //     }
-                                        // }
                                         if let None = dir.shared_files.get(file_id) {
                                             if !file.owned_peers.contains(myself) {
                                                 files_to_delete.push(file_id.clone());
@@ -565,52 +551,22 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             let directory = directories.get_mut(&dir_id);
             if let Some(dir) = directory {
                 let file = dir.shared_files.get_mut(&file_id);
-                let peers_to_send_to = match file {
-                    None => return Ok(()),
-                    Some(file) => {
-                        match &file.content_location {
-                            ContentLocation::LocalPath(path) => {
-                                if path.exists() {
-                                    fs::remove_file(path).await?;
-                                }
+                if let Some(file) = file {
+                    match &file.content_location {
+                        ContentLocation::LocalPath(path) => {
+                            if path.exists() {
+                                fs::remove_file(path).await?;
                             }
-                            _ => (),
                         }
-
-                        let peers = file.owned_peers.clone();
-
-                        dir.delete_files(&server_data.server_handle.peer_id, Utc::now(), vec![file_id.clone()]);
-
-                        peers
+                        _ => (),
                     }
-                };
 
-                server_data.broadcast(&peers_to_send_to, MessageFromServer::DeleteFile(server_data.server_handle.peer_id.clone(), dir.signature.clone(), file_id.clone())).await;
+                    dir.delete_files(&server_data.server_handle.peer_id, Utc::now(), vec![file_id.clone()]);
 
-                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UpdateDirectory, dir.clone())?;
+                    server_data.broadcast(&dir.signature.shared_peers, MessageFromServer::DeleteFile(server_data.server_handle.peer_id.clone(), dir.signature.clone(), file_id.clone())).await;
 
-
-                // if let Some(file) = file {
-                    
-
-                //     file.owned_peers
-                //         .retain(|peer| peer != &server_data.server_handle.peer_id);
-                //     file.content_location = ContentLocation::NetworkOnly;
-                //     dir.signature.last_modified = Utc::now();
-
-                //     server_data
-                //         .broadcast(
-                //             &file.owned_peers,
-                //             MessageFromServer::DeleteFile(
-                //                 server_data.server_handle.peer_id.clone(),
-                //                 dir.signature.clone(),
-                //                 file.identifier,
-                //             ),
-                //         )
-                //         .await;
-
-                //     let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UpdateDirectory, dir.clone())?;
-                // }
+                    let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UpdateDirectory, dir.clone())?;
+                }
             }
 
             Ok(())
