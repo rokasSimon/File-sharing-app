@@ -197,7 +197,15 @@ async fn handle_tcp_message<'a>(
             let directories: Vec<ShareDirectory> = directories
                 .iter()
                 .filter(|(_, dir)| dir.signature.shared_peers.contains(id))
-                .map(|(_, dir)| dir.clone())
+                .map(|(_, dir)| {
+                    let mut out = dir.clone();
+
+                    for (_, mut file) in out.shared_files.iter_mut() {
+                        file.content_location = ContentLocation::NetworkOnly;
+                    }
+
+                    out
+                })
                 .collect();
 
             if directories.len() > 0 {

@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
-    time::Duration,
+    time::Duration, vec,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -332,6 +332,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
         MessageToServer::SynchronizeDirectories(directories, peer) => {
             let mut owned_dirs = server_data.server_handle.config.cached_data.lock().await;
             let mut clients = server_data.clients.lock().await;
+            let myself = &server_data.server_handle.peer_id;
 
             let client = clients.iter_mut().find(|(_, cdata)| match &cdata.id {
                 Some(pid) => pid == &peer,
@@ -339,28 +340,51 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             });
 
             match client {
-                Some((_, c)) => {
+                Some((_, _)) => {
                     for dir in directories {
                         let od = owned_dirs.get_mut(&dir.signature.identifier);
 
                         match od {
                             Some(matched_dir) => {
-                                for pid in dir.signature.shared_peers {
-                                    if !matched_dir.signature.shared_peers.contains(&pid) {
-                                        matched_dir.signature.shared_peers.push(pid);
-                                    }
-                                }
+                                if dir.signature.last_modified > matched_dir.signature.last_modified {
+                                    matched_dir.signature.shared_peers = dir.signature.shared_peers;
 
-                                if dir.signature.last_modified > matched_dir.signature.last_modified
-                                {
-                                    for (id, file) in dir.shared_files {
-                                        if !matched_dir.shared_files.contains_key(&id) {
-                                            matched_dir.shared_files.insert(id, file);
+                                    if !matched_dir.signature.shared_peers.contains(&myself) {
+                                        matched_dir.signature.shared_peers.push(server_data.server_handle.peer_id.clone());
+                                    }
+
+                                    let mut files_to_delete = vec![];
+                                    for (file_id, file) in matched_dir.shared_files.iter_mut() {
+                                        match dir.shared_files.get(file_id) {
+                                            None => {
+                                                if file.owned_peers.len() == 1 && file.owned_peers.contains(myself) {
+                                                    files_to_delete.push(file_id.clone());
+                                                }
+                                            },
+                                            Some(matched_file) => {
+                                                file.owned_peers = matched_file.owned_peers.clone();
+
+                                                if !file.owned_peers.contains(myself) {
+                                                    file.owned_peers.push(myself.clone());
+                                                }
+                                            }
                                         }
                                     }
 
-                                    matched_dir.signature.last_modified =
-                                        dir.signature.last_modified;
+                                    let mut files_to_add = vec![];
+                                    for (file_id, file) in dir.shared_files.iter() {
+                                        if let None = matched_dir.shared_files.get(file_id) {
+                                            files_to_add.push(file.clone());
+                                        }
+                                    }
+
+                                    matched_dir.shared_files.retain(|file_id, _| {
+                                        !files_to_delete.contains(&file_id)
+                                    });
+
+                                    for file in files_to_add {
+                                        matched_dir.shared_files.insert(file.identifier, file);
+                                    }
                                 }
                             }
                             None => {
@@ -400,7 +424,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
     }
 }
 
-async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>) -> Result<()> {
+async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> Result<()> {
     match msg {
         WindowRequest::CreateShareDirectory(name) => {
             let mut data = server_data.server_handle.config.cached_data.lock().await;
@@ -470,15 +494,6 @@ async fn handle_request<'a>(msg: WindowRequest, mut server_data: ServerData<'a>)
                 }
 
                 dir.add_files(shared_files.clone(), Utc::now());
-                // let payload = AddedFiles {
-                //     directory_identifier: dir.signature.identifier,
-                //     shared_files: shared_files.clone(),
-                // };
-
-                // let _ =
-                //     server_data
-                //         .window_manager
-                //         .emit_to(MAIN_WINDOW_LABEL, "AddedFiles", payload)?;
 
                 let _ =
                     server_data

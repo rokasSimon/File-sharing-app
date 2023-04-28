@@ -1,0 +1,7 @@
+"filename", "language", "TypeScript JSX", "Rust", "comment", "blank", "total"
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\client_handle.rs", "Rust", 0, 6, 0, 2, 8
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server_handle.rs", "Rust", 0, -1, 26, 9, 34
+"e:\DEV\Rust\file-sharing-app\src\Components\DirectoryDetails.tsx", "TypeScript JSX", 8, 0, 0, -2, 6
+"e:\DEV\Rust\file-sharing-app\src\RustCommands\ShareDirectoryContext.tsx", "TypeScript JSX", 1, 0, 0, 0, 1
+"e:\DEV\Rust\file-sharing-app\src\RustCommands\networkCommands.tsx", "TypeScript JSX", 6, 0, 0, 0, 6
+"Total", "-", 15, 5, 26, 9, 55
