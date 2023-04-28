@@ -79,6 +79,27 @@ function Directories() {
   const peers = React.useContext(ConnectedDevicesContext);
   const [sharePeers, setSharePeers] = React.useState<SharePeer[] | null>(null);
 
+  React.useEffect(() => {
+    if (optDirectory && peers.length > 0) {
+      const sp = peers.map((peer) => {
+        const matchedPeer = optDirectory.signature.sharedPeers.find(
+          (p) => p.uuid === peer.uuid
+        );
+        const result: SharePeer = {
+          peer,
+          sharedBefore: matchedPeer != undefined,
+          checked: matchedPeer != undefined,
+        };
+  
+        return result;
+      });
+
+      setSharePeers(sp);
+    } else {
+      setSharePeers(null);
+    }
+  }, [peers, optDirectory]);
+
   const [shareOpen, setShareOpen] = React.useState(false);
   const [removeOpen, setRemoveOpen] = React.useState(false);
 
@@ -130,21 +151,6 @@ function Directories() {
     if (directory) {
       setOptDirectory({ ...directory });
       setOptAnchorEl(event.currentTarget);
-
-      const sp = peers.map((peer) => {
-        const matchedPeer = directory.signature.sharedPeers.find(
-          (p) => p.uuid === peer.uuid
-        );
-        const result: SharePeer = {
-          peer,
-          sharedBefore: matchedPeer != undefined,
-          checked: matchedPeer != undefined,
-        };
-  
-        return result;
-      });
-
-      setSharePeers(sp);
     } else {
       setOptDirectory(null);
     }
