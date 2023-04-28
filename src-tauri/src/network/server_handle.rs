@@ -355,26 +355,34 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                                     let mut files_to_delete = vec![];
                                     for (file_id, file) in matched_dir.shared_files.iter_mut() {
-                                        match dir.shared_files.get(file_id) {
-                                            None => {
-                                                if file.owned_peers.len() == 1 && file.owned_peers.contains(myself) {
-                                                    files_to_delete.push(file_id.clone());
-                                                }
-                                            },
-                                            Some(matched_file) => {
-                                                file.owned_peers = matched_file.owned_peers.clone();
+                                        // match dir.shared_files.get(file_id) {
+                                        //     None => {
+                                        //         if file.owned_peers.len() == 1 && file.owned_peers.contains(myself) {
+                                        //             files_to_delete.push(file_id.clone());
+                                        //         }
+                                        //     },
+                                        //     Some(matched_file) => {
+                                        //         file.owned_peers = matched_file.owned_peers.clone();
 
-                                                if !file.owned_peers.contains(myself) {
-                                                    file.owned_peers.push(myself.clone());
-                                                }
+                                        //         if !file.owned_peers.contains(myself) {
+                                        //             file.owned_peers.push(myself.clone());
+                                        //         }
+                                        //     }
+                                        // }
+                                        if let None = dir.shared_files.get(file_id) {
+                                            if !file.owned_peers.contains(myself) {
+                                                files_to_delete.push(file_id.clone());
                                             }
                                         }
                                     }
 
                                     let mut files_to_add = vec![];
                                     for (file_id, file) in dir.shared_files.iter() {
-                                        if let None = matched_dir.shared_files.get(file_id) {
-                                            files_to_add.push(file.clone());
+                                        match matched_dir.shared_files.get_mut(file_id) {
+                                            None => files_to_add.push(file.clone()),
+                                            Some(matched_file) => {
+                                                matched_file.owned_peers = file.owned_peers.clone();
+                                            }
                                         }
                                     }
 
