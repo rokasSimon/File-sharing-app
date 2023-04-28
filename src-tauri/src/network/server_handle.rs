@@ -346,7 +346,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                         match od {
                             Some(matched_dir) => {
-                                if dir.signature.last_modified < matched_dir.signature.last_modified {
+                                if dir.signature.last_modified > matched_dir.signature.last_modified {
                                     matched_dir.signature.shared_peers = dir.signature.shared_peers;
 
                                     if !matched_dir.signature.shared_peers.contains(&myself) {
@@ -385,6 +385,8 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                                     for file in files_to_add {
                                         matched_dir.shared_files.insert(file.identifier, file);
                                     }
+                                } else {
+                                    info!("Received older directory signature: {} | {} < {}", matched_dir.signature.identifier, dir.signature.last_modified, matched_dir.signature.last_modified);
                                 }
                             }
                             None => {
