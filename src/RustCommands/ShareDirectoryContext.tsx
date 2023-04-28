@@ -170,7 +170,6 @@ function ShareDirectoryProvider({ children }: any) {
     startListenSync();
     startListenNewDir();
     startListenUpdateDirectory();
-    //startListenFileAdded();
     loadDirectories();
 
     loaded.current = true;

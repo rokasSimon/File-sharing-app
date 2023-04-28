@@ -150,7 +150,7 @@ function DirectoryDetails({
 
   if (rows.length < 1) {
     const emptyFileRow = (
-      <TableRow>
+      <TableRow key={1}>
         <TableCell align="center" colSpan={5}>
           No files found in this directory
         </TableCell>

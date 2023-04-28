@@ -50,22 +50,24 @@ type SharePeer = {
 
 function Directories() {
   const shareDirectories = React.useContext(ShareDirectoryContext);
-  const [selectedDirectory, setSelectedDirectory] = React.useState<
-    ShareDirectory | undefined
-  >(undefined);
+  const [selectedDirectory, setSelectedDirectory] =
+    React.useState<ShareDirectory | null>(null);
   const [shareCreationName, setShareCreationName] = React.useState("");
   const [shareCreationOpen, setShareCreationOpen] = React.useState(false);
 
-  const peers = React.useContext(ConnectedDevicesContext);
-
-  const [sharePeers, setSharePeers] = React.useState<SharePeer[] | null>(null);
-  const [optDirectory, setOptDirectory] = React.useState<
-    ShareDirectory | undefined
-  >(undefined);
+  const [optDirectory, setOptDirectory] = React.useState<ShareDirectory | null>(
+    null
+  );
   const [optAnchorEl, setOptAnchorEl] = React.useState<null | HTMLElement>(
     null
   );
   const optOpen = Boolean(optAnchorEl);
+  const listItemClickable = !optOpen;
+
+  const peers = React.useContext(ConnectedDevicesContext);
+  const [sharePeers, setSharePeers] = React.useState<SharePeer[] | null>(null);
+
+  console.log(sharePeers);
 
   const [shareOpen, setShareOpen] = React.useState(false);
   const [removeOpen, setRemoveOpen] = React.useState(false);
@@ -98,11 +100,17 @@ function Directories() {
   };
 
   const handleListClick = async (identifier: string) => {
-    const directory = shareDirectories.find((dir) => {
-      return dir.signature.identifier === identifier;
-    });
+    if (listItemClickable) {
+      const directory = shareDirectories.find((dir) => {
+        return dir.signature.identifier === identifier;
+      });
 
-    setSelectedDirectory(directory);
+      if (directory) {
+        setSelectedDirectory({ ...directory });
+      } else {
+        setSelectedDirectory(null);
+      }
+    }
   };
 
   const handleDirectoryOptionsOpen = (
@@ -113,12 +121,31 @@ function Directories() {
       return dir.signature.identifier === identifier;
     });
 
-    setOptDirectory(directory);
-    setOptAnchorEl(event.currentTarget);
+    if (directory) {
+      setOptDirectory({ ...directory });
+      setOptAnchorEl(event.currentTarget);
+
+      const sp = peers.map((peer) => {
+        const matchedPeer = directory.signature.sharedPeers.find(
+          (p) => p.uuid === peer.uuid
+        );
+        const result: SharePeer = {
+          peer,
+          sharedBefore: matchedPeer != undefined,
+          checked: matchedPeer != undefined,
+        };
+  
+        return result;
+      });
+
+      setSharePeers(sp);
+    } else {
+      setOptDirectory(null);
+    }
   };
 
   const handleDirectoryOptionsClose = () => {
-    setOptDirectory(undefined);
+    setOptDirectory(null);
     setOptAnchorEl(null);
   };
 
@@ -164,56 +191,45 @@ function Directories() {
     );
   }
 
-  const handleShareOpen = (directoryIdentifier: string) => {
-    handleDirectoryOptionsClose();
+  const handleShareOpen = (directoryIdentifier: string | undefined) => {
+    if (directoryIdentifier) {
+      handleDirectoryOptionsClose();
 
-    const dir = shareDirectories.find(
-      (d) => d.signature.identifier === directoryIdentifier
-    );
-    if (!dir) return;
+      const dir = shareDirectories.find(
+        (d) => d.signature.identifier === directoryIdentifier
+      );
+      if (!dir) return;
 
-    const request: GetPeers = {
-      getPeers: true,
-    };
+      const request: GetPeers = {
+        getPeers: true,
+      };
 
-    invokeNetworkCommand(request).then(() => {
-      setOptDirectory(dir);
-      setShareOpen(true);
-
-      const newSharePeers = peers.map((peer) => {
-        const matchedPeer = dir.signature.sharedPeers.find(
-          (p) => p.uuid === peer.uuid
-        );
-        const result: SharePeer = {
-          peer,
-          sharedBefore: matchedPeer != undefined,
-          checked: matchedPeer != undefined,
-        };
-
-        return result;
+      invokeNetworkCommand(request).then(() => {
+        setOptDirectory(dir);
+        setShareOpen(true);
       });
-
-      setSharePeers(newSharePeers);
-    });
+    }
   };
 
   const handleShareClose = () => {
-    setOptDirectory(undefined);
+    setOptDirectory(null);
     setShareOpen(false);
   };
 
   const handleShare = async () => {
     if (!optDirectory || !sharePeers) return;
 
-    const peersToShareTo = sharePeers.filter((peer) => {
-      return peer.checked && !peer.sharedBefore;
-    }).map((peer) => peer.peer);
+    const peersToShareTo = sharePeers
+      .filter((peer) => {
+        return peer.checked && !peer.sharedBefore;
+      })
+      .map((peer) => peer.peer);
 
     const request: ShareDirectoryToPeers = {
       shareDirectoryToPeers: {
         directory_identifier: optDirectory.signature.identifier,
-        peers: peersToShareTo
-      }
+        peers: peersToShareTo,
+      },
     };
 
     await invokeNetworkCommand(request);
@@ -221,20 +237,22 @@ function Directories() {
     handleShareClose();
   };
 
-  const handleRemoveOpen = (directoryIdentifier: string) => {
-    handleDirectoryOptionsClose();
+  const handleRemoveOpen = (directoryIdentifier: string | undefined) => {
+    if (directoryIdentifier) {
+      handleDirectoryOptionsClose();
 
-    const dir = shareDirectories.find(
-      (d) => d.signature.identifier === directoryIdentifier
-    );
-    if (!dir) return;
+      const dir = shareDirectories.find(
+        (d) => d.signature.identifier === directoryIdentifier
+      );
+      if (!dir) return;
 
-    setOptDirectory(dir);
-    setRemoveOpen(true);
+      setOptDirectory(dir);
+      setRemoveOpen(true);
+    }
   };
 
   const handleRemoveClose = () => {
-    setOptDirectory(undefined);
+    setOptDirectory(null);
     setRemoveOpen(false);
   };
 
@@ -280,22 +298,6 @@ function Directories() {
                 >{` (${usedCount})`}</Typography>
               )}
             </ListItemText>
-            <MaterialMenu
-              anchorEl={optAnchorEl}
-              open={optOpen}
-              onClose={handleDirectoryOptionsClose}
-            >
-              <MenuItem
-                onClick={() => handleRemoveOpen(val.signature.identifier)}
-              >
-                Remove
-              </MenuItem>
-              <MenuItem
-                onClick={() => handleShareOpen(val.signature.identifier)}
-              >
-                Share
-              </MenuItem>
-            </MaterialMenu>
           </ListItemButton>
         </ListItem>
       );
@@ -312,6 +314,24 @@ function Directories() {
         >
           Start Share Directory
         </Button>
+        <MaterialMenu
+          anchorEl={optAnchorEl}
+          open={optOpen}
+          onClose={handleDirectoryOptionsClose}
+        >
+          <MenuItem
+            onClick={() =>
+              handleRemoveOpen(optDirectory?.signature?.identifier)
+            }
+          >
+            Remove
+          </MenuItem>
+          <MenuItem
+            onClick={() => handleShareOpen(optDirectory?.signature?.identifier)}
+          >
+            Share
+          </MenuItem>
+        </MaterialMenu>
       </div>
       <List id="directories">{directories}</List>
     </div>
@@ -374,9 +394,7 @@ function Directories() {
       <Dialog open={removeOpen} onClose={handleRemoveClose}>
         <div>
           <DialogTitle>Directory Removal</DialogTitle>
-          <DialogContent>
-
-          </DialogContent>
+          <DialogContent></DialogContent>
           <DialogActions>
             <Button onClick={handleRemoveClose}>Cancel</Button>
             <Button onClick={handleRemove}>Remove</Button>

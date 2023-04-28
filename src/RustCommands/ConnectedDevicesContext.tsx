@@ -27,10 +27,10 @@ function ConnectedDevicesProvider({ children }: any) {
       const _ = await listen<Array<PeerId>>("GetPeers", (event) => {
         const input = event.payload;
 
-        let foundPeers = [...input];
-        console.log("Setting peers " + JSON.stringify(foundPeers));
+        peersRef.current = [...input];
+        console.log("Setting peers " + JSON.stringify(peersRef.current));
 
-        setPeers(foundPeers);
+        setPeers(peersRef.current);
       });
     };
 
