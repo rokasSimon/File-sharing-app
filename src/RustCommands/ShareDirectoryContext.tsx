@@ -120,16 +120,31 @@ function ShareDirectoryProvider({ children }: any) {
           }
         });
 
-        const directory = directoriesRef.current.find((dir) => {
-          return dir.signature.identifier === input.signature.identifier;
-        });
+        const newDirectory: ShareDirectory = {
+          signature: input.signature,
+          shared_files: fileMap
+        };
+        let updatedDirectories = [ newDirectory ];
 
-        if (directory) {
-          directory.signature = input.signature;
-          directory.shared_files = fileMap;
+        for (const directory of directoriesRef.current) {
+          if (directory.signature.identifier !== input.signature.identifier) {
+            updatedDirectories.push(directory);
+          }
         }
 
-        setDirectories(directoriesRef.current);
+        const sortedDirectories = updatedDirectories.sort((a, b) => {
+          if (a.signature.identifier < b.signature.identifier) {
+            return -1;
+          } else if (a.signature.identifier > b.signature.identifier) {
+            return 1;
+          }
+
+          return 0;
+        });
+
+        console.log("Updating to " + JSON.stringify(sortedDirectories));
+
+        setDirectories(sortedDirectories);
       });
     };
 

@@ -55,6 +55,18 @@ function Directories() {
   const [shareCreationName, setShareCreationName] = React.useState("");
   const [shareCreationOpen, setShareCreationOpen] = React.useState(false);
 
+  React.useEffect(() => {
+    if (selectedDirectory) {
+      const directory = shareDirectories.find((dir) => dir.signature.identifier === selectedDirectory.signature.identifier);
+
+      if (directory) {
+        setSelectedDirectory(directory);
+      } else {
+        setSelectedDirectory(null);
+      }
+    }
+  }, [shareDirectories]);
+
   const [optDirectory, setOptDirectory] = React.useState<ShareDirectory | null>(
     null
   );
@@ -66,8 +78,6 @@ function Directories() {
 
   const peers = React.useContext(ConnectedDevicesContext);
   const [sharePeers, setSharePeers] = React.useState<SharePeer[] | null>(null);
-
-  console.log(sharePeers);
 
   const [shareOpen, setShareOpen] = React.useState(false);
   const [removeOpen, setRemoveOpen] = React.useState(false);
@@ -90,11 +100,7 @@ function Directories() {
       createShareDirectory: shareCreationName,
     };
 
-    try {
-      await invokeNetworkCommand(request);
-    } catch (e) {
-      console.log(e);
-    }
+    await invokeNetworkCommand(request);
 
     handleCloseCreate();
   };
