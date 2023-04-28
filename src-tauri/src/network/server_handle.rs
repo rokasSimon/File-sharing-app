@@ -346,7 +346,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                         match od {
                             Some(matched_dir) => {
-                                if dir.signature.last_modified > matched_dir.signature.last_modified {
+                                if dir.signature.last_modified < matched_dir.signature.last_modified {
                                     matched_dir.signature.shared_peers = dir.signature.shared_peers;
 
                                     if !matched_dir.signature.shared_peers.contains(&myself) {
