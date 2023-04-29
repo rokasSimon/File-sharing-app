@@ -74,7 +74,7 @@ function DownloadsManager({ children }: any) {
               });
     
               setDownloads(downloadsToKeep);
-            });
+            }, 5000);
           }
         }
 
