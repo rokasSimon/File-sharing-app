@@ -30,6 +30,12 @@ pub enum TcpMessage {
         files: Vec<SharedFile>
     },
 
+    DownloadedFile {
+        peer_id: PeerId,
+        directory_identifier: Uuid,
+        file_identifier: Uuid,
+    },
+
     StartDownload {
         download_id: Uuid,
         file_id: Uuid,

@@ -66,6 +66,16 @@ function DownloadsManager({ children }: any) {
 
         if (alreadyDownloading) {
           alreadyDownloading.progress = input.progress;
+
+          if (alreadyDownloading.progress === 100) {
+            setTimeout(() => {
+              const downloadsToKeep = downloadsRef.current.filter((download) => {
+                return download.downloadId !== alreadyDownloading?.downloadId;
+              });
+    
+              setDownloads(downloadsToKeep);
+            });
+          }
         }
 
         setDownloads([ ...downloadsRef.current ]);
@@ -118,7 +128,8 @@ function DownloadsManager({ children }: any) {
   };
 
   const downloadIndicators = downloads.map((download) => {
-    const color = download.canceled ? "error" : "primary";
+    const startColor = download.progress === 100 ? "success" : "primary";
+    const color = download.canceled ? "error" : startColor;
 
     return (
       <Paper

@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::{
-    fs::{File, self},
+    fs::{self, File},
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
     net::{tcp::WriteHalf, TcpStream},
     sync::mpsc,
@@ -20,7 +20,7 @@ use crate::{
 
 use super::{
     codec::{MessageCodec, TcpMessage},
-    server_handle::{ClientConnectionId, ServerHandle},
+    server_handle::{ClientConnectionId, Download, ServerHandle},
 };
 
 const FILE_CHUNK_SIZE: usize = 1024 * 4;
@@ -40,6 +40,11 @@ pub enum MessageFromServer {
         file_identifier: Uuid,
         directory_identifier: Uuid,
         destination: PathBuf,
+    },
+    UpdateOwners {
+        peer_id: PeerId,
+        directory_identifier: Uuid,
+        file_identifier: Uuid,
     },
 
     SharedDirectory(ShareDirectory),
@@ -407,7 +412,10 @@ async fn handle_tcp_message<'a>(
                     let res = download.output_file.write_all(&raw_data).await;
 
                     match res {
-                        Err(e) => Err(DownloadError::WriteError),
+                        Err(e) => {
+                            download.canceled = true;
+                            Err(DownloadError::WriteError)
+                        }
                         Ok(_) => {
                             let bytes_received = u64::try_from(raw_data.len())
                                 .expect("app should be running on a 64 bit system");
@@ -416,7 +424,10 @@ async fn handle_tcp_message<'a>(
                             let percent = u8::try_from(download.bytes_done / download.bytes_total);
 
                             match percent {
-                                Err(_) => Err(DownloadError::FileTooLarge),
+                                Err(_) => {
+                                    download.canceled = true;
+                                    Err(DownloadError::FileTooLarge)
+                                }
                                 Ok(percent) => {
                                     let percent = u8::clamp(percent, 0, 100);
                                     let _ = data
@@ -455,16 +466,82 @@ async fn handle_tcp_message<'a>(
 
         TcpMessage::DownloadError { error, download_id } => {
             error!("Download error: {:?}", error);
+            let download = data.downloads.remove(&download_id);
 
+            match download {
+                None => Ok(()),
+                Some(mut download) => {
+                    download.canceled = true;
+                    let _ = data
+                        .client_data
+                        .server
+                        .channel
+                        .send(MessageToServer::CanceledDownload {
+                            cancel_reason: error.to_string(),
+                            download_id,
+                        })
+                        .await?;
+
+                    Ok(())
+                }
+            }
+        }
+
+        TcpMessage::ReceiveFileEnd { download_id } => {
             if data.downloads.contains_key(&download_id) {
-                data.downloads.remove(&download_id);
+                error!("Received file end for unknown download");
+
+                return Ok(());
+            }
+
+            let myself = &data.client_data.server.peer_id;
+            let mut directories = data.client_data.server.config.cached_data.lock().await;
+            let mut download = data.downloads.remove(&download_id).unwrap();
+            let directory = directories.get_mut(&download.dir_id);
+
+            let result = match directory {
+                None => {
+                    download.canceled = true;
+                    Err(DownloadError::DirectoryMissing)
+                },
+                Some(directory) => {
+                    let file = directory.shared_files.get_mut(&download.file_id);
+
+                    match file {
+                        None => {
+                            download.canceled = true;
+                            Err(DownloadError::FileMissing)
+                        },
+                        Some(file) => {
+                            file.owned_peers.push(myself.clone());
+                            file.content_location =
+                                ContentLocation::LocalPath(download.output_path.clone());
+
+                            let _ = data
+                                .client_data
+                                .server
+                                .channel
+                                .send(MessageToServer::FinishedDownload {
+                                    download_id,
+                                    directory_identifier: download.dir_id,
+                                    file_identifier: download.file_id,
+                                })
+                                .await?;
+
+                            Ok(())
+                        }
+                    }
+                }
+            };
+
+            if let Err(e) = result {
                 let _ = data
                     .client_data
                     .server
                     .channel
                     .send(MessageToServer::CanceledDownload {
-                        cancel_reason: error.to_string(),
                         download_id,
+                        cancel_reason: e.to_string(),
                     })
                     .await?;
             }
@@ -472,26 +549,16 @@ async fn handle_tcp_message<'a>(
             Ok(())
         }
 
-        TcpMessage::ReceiveFileEnd { download_id, } => {
-            let download = data.downloads.get_mut(&download_id);
+        TcpMessage::DownloadedFile { peer_id, directory_identifier, file_identifier } => {
+            let mut directories = data.client_data.server.config.cached_data.lock().await;
 
-            match download {
-                None => {
-                    error!("Received file end for unknown download");
-
-                    Ok(())
-                },
-                Some(_) => {
-                    let _ = data.client_data.server.channel.send(MessageToServer::DownloadUpdate {
-                        download_id,
-                        new_progress: 100,
-                    }).await?;
-
-                    data.downloads.remove(&download_id);
-
-                    Ok(())
+            if let Some(directory) = directories.get_mut(&directory_identifier) {
+                if let Some(file) = directory.shared_files.get_mut(&file_identifier) {
+                    file.owned_peers.push(peer_id);
                 }
             }
+
+            Ok(())
         }
     }
 }
@@ -588,7 +655,7 @@ async fn handle_server_messages(
                             ContentLocation::NetworkOnly => {
                                 let file_handle = File::create(&destination).await;
                                 match file_handle {
-                                    Err(e) => Err(DownloadError::WriteError),
+                                    Err(_) => Err(DownloadError::WriteError),
                                     Ok(file_handle) => {
                                         data.downloads.insert(
                                             download_id,
@@ -597,9 +664,9 @@ async fn handle_server_messages(
                                                 bytes_total: file.size,
                                                 bytes_done: 0,
                                                 output_file: file_handle,
-                                                output_path: destination,
+                                                output_path: destination.clone(),
                                                 file_id: file_identifier,
-                                                dir_id: directory_identifier
+                                                dir_id: directory_identifier,
                                             },
                                         );
 
@@ -609,6 +676,22 @@ async fn handle_server_messages(
                                                 download_id,
                                                 file_id: file_identifier,
                                                 dir_id: directory_identifier,
+                                            })
+                                            .await?;
+
+                                        let _ = data
+                                            .client_data
+                                            .server
+                                            .channel
+                                            .send(MessageToServer::StartedDownload {
+                                                download_info: Download {
+                                                    download_id,
+                                                    file_identifier,
+                                                    directory_identifier,
+                                                    progress: 0,
+                                                    file_name: file.name.clone(),
+                                                    file_path: destination,
+                                                },
                                             })
                                             .await?;
 
@@ -633,6 +716,12 @@ async fn handle_server_messages(
                     })
                     .await?;
             }
+
+            Ok(())
+        }
+
+        MessageFromServer::UpdateOwners { peer_id, directory_identifier, file_identifier } => {
+            let _ = data.tcp_write.send(TcpMessage::DownloadedFile { peer_id, directory_identifier, file_identifier }).await?;
 
             Ok(())
         }

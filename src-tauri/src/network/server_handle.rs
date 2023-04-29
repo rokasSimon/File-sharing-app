@@ -114,6 +114,11 @@ pub enum MessageToServer {
     StartedDownload {
         download_info: Download
     },
+    FinishedDownload {
+        download_id: Uuid,
+        directory_identifier: Uuid,
+        file_identifier: Uuid,
+    },
     DownloadUpdate {
         download_id: Uuid,
         new_progress: u8,
@@ -509,6 +514,41 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             )?;
 
             Ok(())
+        }
+
+        MessageToServer::FinishedDownload { download_id, directory_identifier, file_identifier } => {
+            let myself = server_data.server_handle.peer_id.clone();
+            let directories = server_data.server_handle.config.cached_data.lock().await;
+            let directory = directories.get(&directory_identifier);
+
+            match directory {
+                None => {
+                    let _ = server_data.window_manager.emit_to(
+                        MAIN_WINDOW_LABEL,
+                        WindowAction::DOWNLOAD_CANCELED,
+                        DownloadCanceled {
+                            download_id,
+                            reason: "Could not update other clients.".to_owned()
+                        },
+                    )?;
+        
+                    Ok(())
+                },
+                Some(directory) => {
+                    server_data.broadcast(&directory.signature.shared_peers, MessageFromServer::UpdateOwners { peer_id: myself, directory_identifier, file_identifier }).await;
+
+                    let _ = server_data.window_manager.emit_to(
+                        MAIN_WINDOW_LABEL,
+                        WindowAction::DOWNLOAD_UPDATE,
+                        DownloadUpdate {
+                            download_id,
+                            progress: 100
+                        },
+                    )?;
+        
+                    Ok(())
+                }
+            }
         }
 
         MessageToServer::DownloadUpdate {
