@@ -20,7 +20,6 @@ pub fn load_stored_data() -> StoredConfig {
 
     let config_path = ensure_path(app_dir.config_dir, APP_CONFIG_LOCATION);
     let cache_path = ensure_path(app_dir.data_dir.clone(), APP_CACHE_LOCATION);
-    let download_path = ensure_path(app_dir.data_dir, DEFAULT_DOWNLOAD_LOCATION);
 
     let config_str = fs::read_to_string(&config_path).expect("to be able to read the config file");
     let mut config: AppConfig = serde_json::from_str(&config_str).unwrap_or_default();
@@ -30,7 +29,11 @@ pub fn load_stored_data() -> StoredConfig {
     }
 
     if !config.download_directory.exists() {
-        config.download_directory = download_path;
+        let default_download_path = app_dir.data_dir.join(DEFAULT_DOWNLOAD_LOCATION);
+
+        fs::create_dir(default_download_path.clone()).expect("should be able to create default download directory");
+
+        config.download_directory = default_download_path;
     }
 
     let cache_str = fs::read_to_string(&cache_path).expect("to be able to read cache file");
