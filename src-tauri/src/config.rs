@@ -19,7 +19,7 @@ pub fn load_stored_data() -> StoredConfig {
         AppDirs::new(Some(APP_FILES_LOCATION), false).expect("to be able to create config files");
 
     let config_path = ensure_path(app_dir.config_dir, APP_CONFIG_LOCATION);
-    let cache_path = ensure_path(app_dir.data_dir, APP_CACHE_LOCATION);
+    let cache_path = ensure_path(app_dir.data_dir.clone(), APP_CACHE_LOCATION);
     let download_path = ensure_path(app_dir.data_dir, DEFAULT_DOWNLOAD_LOCATION);
 
     let config_str = fs::read_to_string(&config_path).expect("to be able to read the config file");

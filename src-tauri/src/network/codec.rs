@@ -14,10 +14,10 @@ const LENGTH_MARKER_SIZE: usize = 4;
 #[derive(Serialize, Deserialize, Debug)]
 pub enum TcpMessage {
     RequestPeerId,
-    SendPeerId(PeerId),
+    ReceivePeerId(PeerId),
 
     Synchronize,
-    SendDirectories(Vec<ShareDirectory>),
+    ReceiveDirectories(Vec<ShareDirectory>),
 
     DeleteFile {
         peer_id: PeerId,
@@ -36,12 +36,12 @@ pub enum TcpMessage {
         dir_id: Uuid,
     },
 
-    SendFilePart {
+    ReceiveFilePart {
         download_id: Uuid,
         data: Vec<u8>
     },
 
-    SendFileEnd {
+    ReceiveFileEnd {
         download_id: Uuid,
         data: Vec<u8>
     },

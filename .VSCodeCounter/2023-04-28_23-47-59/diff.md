@@ -1,24 +1,24 @@
 # Diff Summary
 
-Date : 2023-04-28 17:59:57
+Date : 2023-04-28 23:47:59
 
 Directory e:\\DEV\\Rust\\file-sharing-app
 
-Total : 2 files,  101 codes, 0 comments, 23 blanks, all 124 lines
+Total : 1 files,  78 codes, 0 comments, 1 blanks, all 79 lines
 
 [Summary](results.md) / [Details](details.md) / Diff Summary / [Diff Details](diff-details.md)
 
 ## Languages
 | language | files | code | comment | blank | total |
 | :--- | ---: | ---: | ---: | ---: | ---: |
-| Rust | 2 | 101 | 0 | 23 | 124 |
+| Rust | 1 | 78 | 0 | 1 | 79 |
 
 ## Directories
 | path | files | code | comment | blank | total |
 | :--- | ---: | ---: | ---: | ---: | ---: |
-| . | 2 | 101 | 0 | 23 | 124 |
-| src-tauri | 2 | 101 | 0 | 23 | 124 |
-| src-tauri\\src | 2 | 101 | 0 | 23 | 124 |
-| src-tauri\\src\\network | 2 | 101 | 0 | 23 | 124 |
+| . | 1 | 78 | 0 | 1 | 79 |
+| src-tauri | 1 | 78 | 0 | 1 | 79 |
+| src-tauri\\src | 1 | 78 | 0 | 1 | 79 |
+| src-tauri\\src\\network | 1 | 78 | 0 | 1 | 79 |
 
 [Summary](results.md) / [Details](details.md) / Diff Summary / [Diff Details](diff-details.md)

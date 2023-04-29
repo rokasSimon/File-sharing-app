@@ -168,6 +168,7 @@ impl WindowAction {
     pub const NEW_SHARE_DIRECTORY: &str = "NewShareDirectory";
     pub const DOWNLOADING_FILE: &str = "DownloadingFile";
     pub const ERROR: &str = "Error";
+    pub const CANCELED_DOWNLOAD: &str = "CanceledDownload";
 }
 
 pub async fn server_loop(
@@ -522,7 +523,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                 Some(client) => {
                     let download = client.ongoing_downloads.get_mut(&download_id);
 
-                    match download {
+                    let result = match download {
                         None => Err(BackendError { error: String::from("Could not update download."), title: String::from("Download Failure") }),
                         Some(download) => {
                             download.progress = new_progress;
@@ -530,12 +531,19 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
                             Ok(())
                         }
-                    }
+                    };
+
+                    if let Err(_) = result {
+                        client.ongoing_downloads.remove(&download_id);
+                    } 
+
+                    result
                 }
             };
 
             if let Err(e) = result {
                 let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::ERROR, e)?;
+                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::CANCELED_DOWNLOAD, download_id)?;
             }
 
             Ok(())
@@ -547,7 +555,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
             let result = match client {
                 None => Err(BackendError {
-                    error: String::from("Client must have disconnected"),
+                    error: String::from("Client must have disconnected."),
                     title: String::from("Download Error")
                 }),
                 Some(client) => {
@@ -571,6 +579,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
             if let Err(e) = result {
                 let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::ERROR, e)?;
+                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::CANCELED_DOWNLOAD, download_id)?;
             }
 
             Ok(())
@@ -606,6 +615,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
             if let Err(e) = result {
                 let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::ERROR, e)?;
+                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::CANCELED_DOWNLOAD, download_id)?;
             }
 
             Ok(())
@@ -794,11 +804,18 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             let directory = directories.get(&dir_id);
 
             let result = match directory {
+                None => Err(BackendError {
+                    error: "Directory not found.".to_owned(),
+                    title: "Download Failure".to_owned(),
+                }),
                 Some(dir) => {
                     let file = dir.shared_files.get(&file_id);
 
                     match file {
-                        None => Err(anyhow!("File was not found")),
+                        None => Err(BackendError {
+                            error: "File not found.".to_owned(),
+                            title: "Download Failure".to_owned(),
+                        }),
                         Some(file) => {
                             let mut clients = server_data.clients.lock().await;
                             let client = clients.iter_mut().find(|(_, c)| {
@@ -810,7 +827,10 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                             });
 
                             match client {
-                                None => Err(anyhow!("No clients to download from")),
+                                None => Err(BackendError {
+                                    error: "No connected clients that have this file.".to_owned(),
+                                    title: "Download Failure".to_owned(),
+                                }),
                                 Some((_, c)) => {
                                     let download_id = Uuid::new_v4();
 
@@ -842,11 +862,10 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                         }
                     }
                 }
-                None => Err(anyhow!("No such directory found")),
             };
 
             if let Err(e) = result {
-                error!("{}", e);
+                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::ERROR, e)?;
             }
 
             Ok(())
