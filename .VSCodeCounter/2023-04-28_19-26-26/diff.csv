@@ -1,6 +1,0 @@
-"filename", "language", "Rust", "comment", "blank", "total"
-"e:\DEV\Rust\file-sharing-app\src-tauri\src\config.rs", "Rust", 7, 0, 1, 8
-"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\client_handle.rs", "Rust", 38, 0, 5, 43
-"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec.rs", "Rust", 4, 0, 1, 5
-"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server_handle.rs", "Rust", 4, 0, 1, 5
-"Total", "-", 53, 0, 8, 61

@@ -42,8 +42,7 @@ pub enum TcpMessage {
     },
 
     ReceiveFileEnd {
-        download_id: Uuid,
-        data: Vec<u8>
+        download_id: Uuid
     },
 
     DownloadError {

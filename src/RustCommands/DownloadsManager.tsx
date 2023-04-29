@@ -11,16 +11,26 @@ import {
 } from "@mui/material";
 import { CancelDownload, invokeNetworkCommand } from "./networkCommands";
 
-type DownloadingFile = {
+type Download = {
   downloadId: string;
-  directoryIdentifier: string;
   fileIdentifier: string;
-  fileName: string;
+  directoryIdentifier: string;
   progress: number;
-  canceled: boolean;
+  fileName: string;
+  filePath: string;
 };
 
-const initialState: Array<DownloadingFile> = [];
+type DownloadUpdate = {
+  progress: number;
+  downloadId: string;
+};
+
+type DownloadCanceled = {
+  reason: string;
+  downloadId: string;
+};
+
+const initialState: Array<Download> = [];
 // const DownloadsContext =
 //   React.createContext<Array<DownloadingFile>>(initialState);
 
@@ -36,35 +46,37 @@ function DownloadsManager({ children }: any) {
   React.useEffect(() => {
     if (loaded.current) return;
 
-    const startListenDownloads = async () => {
-      const _ = await listen<DownloadingFile>("DownloadingFile", (event) => {
+    const startListenDownloadStart = async () => {
+      const _ = await listen<Download>("DownloadStarted", (event) => {
+        const input = event.payload;
+
+        const updatedDownloads = [
+          input,
+          ...downloadsRef.current
+        ];
+
+        setDownloads(updatedDownloads);
+      });
+    };
+
+    const startListenDownloadUpdate = async () => {
+      const _ = await listen<DownloadUpdate>("DownloadUpdate", (event) => {
         const input = event.payload;
 
         const alreadyDownloading = downloadsRef.current.find((download) => {
           return download.downloadId === input.downloadId;
         });
 
-        let updatedDownloads = [];
         if (alreadyDownloading) {
-          if (input.progress === 100) {
-            updatedDownloads = downloadsRef.current.filter((download) => {
-              return download.downloadId !== input.downloadId;
-            });
-          } else {
-            alreadyDownloading.progress = input.progress;
-
-            updatedDownloads = downloadsRef.current;
-          }
-        } else {
-          updatedDownloads = [input, ...downloadsRef.current];
+          alreadyDownloading.progress = input.progress;
         }
 
-        setDownloads(updatedDownloads);
+        setDownloads([ ...downloadsRef.current ]);
       });
     };
 
     const startListenDownloadCanceled = async () => {
-      const _ = await listen<DownloadingFile>("CanceledDownload", (event) => {
+      const _ = await listen<DownloadCanceled>("DownloadCanceled", (event) => {
         const input = event.payload;
 
         // const currentDownloads = [input, ...downloadsRef.current];
@@ -73,7 +85,8 @@ function DownloadsManager({ children }: any) {
       });
     };
 
-    startListenDownloads();
+    startListenDownloadStart();
+    startListenDownloadUpdate();
     startListenDownloadCanceled();
 
     loaded.current = true;

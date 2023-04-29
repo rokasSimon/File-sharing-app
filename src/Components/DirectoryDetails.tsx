@@ -41,6 +41,7 @@ import {
 } from "../RustCommands/networkCommands";
 import React from "react";
 import { invoke } from "@tauri-apps/api";
+import { ConnectedDevicesContext } from "../RustCommands/ConnectedDevicesContext";
 
 type DirectoryDetailsProps = {
   files: Map<string, SharedFile>;
@@ -64,6 +65,7 @@ function DirectoryDetails({
   directoryIdentifier,
 }: DirectoryDetailsProps) {
   const [fileDetails, setFileDetails] = React.useState<SharedFile | null>(null);
+  const peers = React.useContext(ConnectedDevicesContext);
   const detailsOpen = Boolean(fileDetails);
 
   const handleAddFiles = async () => {
@@ -129,24 +131,43 @@ function DirectoryDetails({
     if (file.contentLocation.localPath) {
       const result = await invoke("open_file", {
         message: {
-          file_path: file.contentLocation.localPath
+          file_path: file.contentLocation.localPath,
         },
       });
-
-      console.error(result);
     }
   };
 
   let rows = [];
   for (const [id, file] of files.entries()) {
-    const downloadButton = file?.contentLocation?.localPath ? (
+    const fileIsDownloadable = file.ownedPeers.find((peer) => {
+      for (const connectedPeer of peers) {
+        if (
+          connectedPeer.hostname === peer.hostname &&
+          connectedPeer.uuid === peer.uuid
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    const downloadButton = fileIsDownloadable ? (
+      <IconButton onClick={handleDownload(file.identifier)} color="success">
+        <DownloadIcon />
+      </IconButton>
+    ) : (
+      <IconButton color="error">
+        <DownloadIcon />
+      </IconButton>
+    );
+
+    const fileButton = file?.contentLocation?.localPath ? (
       <IconButton onClick={handleOpenFile(file)}>
         <DownloadDoneIcon />
       </IconButton>
     ) : (
-      <IconButton onClick={handleDownload(file.identifier)}>
-        <DownloadIcon />
-      </IconButton>
+      downloadButton
     );
 
     const row = (
@@ -164,7 +185,7 @@ function DirectoryDetails({
           </IconButton>
         </TableCell>
         <TableCell variant="body" align="right">
-          {downloadButton}
+          {fileButton}
         </TableCell>
       </TableRow>
     );

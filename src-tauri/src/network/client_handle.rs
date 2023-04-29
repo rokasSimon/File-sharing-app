@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::{
-    fs::File,
+    fs::{File, self},
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
     net::{tcp::WriteHalf, TcpStream},
     sync::mpsc,
@@ -20,7 +20,7 @@ use crate::{
 
 use super::{
     codec::{MessageCodec, TcpMessage},
-    server_handle::{BackendError, ClientConnectionId, ServerHandle},
+    server_handle::{ClientConnectionId, ServerHandle},
 };
 
 const FILE_CHUNK_SIZE: usize = 1024 * 4;
@@ -47,20 +47,52 @@ pub enum MessageFromServer {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DownloadError {
+    NoClientsConnected,
     DirectoryMissing,
     FileMissing,
     FileNotOwned,
+    FileTooLarge,
+    Disconnected,
     Canceled,
     ReadError,
+    WriteError,
 }
 
-pub struct DownloadHandle {
+impl DownloadError {
+    pub fn to_string(&self) -> String {
+        match self {
+            DownloadError::NoClientsConnected => "No clients to download from. Reconnect other devices to network".to_owned(),
+            DownloadError::DirectoryMissing => "Download directory is missing. File might have been removed while being downloaded.".to_owned(),
+            DownloadError::FileMissing => "Download file is missing. File might have been removed while downloading.".to_owned(),
+            DownloadError::FileNotOwned => "Client does not have this file locally.".to_owned(),
+            DownloadError::FileTooLarge => "Download file size might have changed while it was being downloaded.".to_owned(),
+            DownloadError::Canceled => "Download was manually canceled.".to_owned(),
+            DownloadError::Disconnected => "Download was canceled since one of the clients disconnected".to_owned(),
+            DownloadError::ReadError => "Could not read file to download.".to_owned(),
+            DownloadError::WriteError => "Could not write file.".to_owned(),
+        }
+    }
+}
+
+struct DownloadHandle {
+    canceled: bool,
     bytes_total: u64,
     bytes_done: u64,
     output_file: File,
+    output_path: PathBuf,
+    file_id: Uuid,
+    dir_id: Uuid,
 }
 
-pub struct UploadHandle {
+impl Drop for DownloadHandle {
+    fn drop(&mut self) {
+        if self.canceled {
+            let _ = std::fs::remove_file(self.output_path.clone());
+        }
+    }
+}
+
+struct UploadHandle {
     is_cancelled: bool,
 }
 
@@ -68,14 +100,14 @@ pub struct ClientData {
     pub server: ServerHandle,
     pub receiver: mpsc::Receiver<MessageFromServer>,
     pub addr: ClientConnectionId,
-    pub downloads: HashMap<Uuid, DownloadHandle>,
-    pub uploads: HashMap<Uuid, UploadHandle>,
 }
 
 struct ClientDataHandle<'a> {
     client_data: &'a mut ClientData,
     tcp_write: &'a mut FramedWrite<WriteHalf<'a>, MessageCodec>,
     client_peer_id: &'a mut Option<PeerId>,
+    downloads: &'a mut HashMap<Uuid, DownloadHandle>,
+    uploads: &'a mut HashMap<Uuid, UploadHandle>,
 }
 
 pub async fn client_loop(
@@ -87,11 +119,15 @@ pub async fn client_loop(
 
     let mut framed_reader = FramedRead::new(read, MessageCodec {});
     let mut framed_writer = FramedWrite::new(write, MessageCodec {});
+    let mut downloads: HashMap<Uuid, DownloadHandle> = HashMap::new();
+    let mut uploads: HashMap<Uuid, UploadHandle> = HashMap::new();
 
     let mut handle = ClientDataHandle {
         client_data: &mut client_data,
         tcp_write: &mut framed_writer,
         client_peer_id: &mut client_peer_id,
+        downloads: &mut downloads,
+        uploads: &mut uploads,
     };
 
     loop {
@@ -316,8 +352,8 @@ async fn handle_tcp_message<'a>(
 
                                     match file_handle {
                                         Err(_) => Err(DownloadError::FileMissing),
-                                        core::result::Result::Ok(file_handle) => {
-                                            data.client_data.uploads.insert(
+                                        Ok(file_handle) => {
+                                            data.uploads.insert(
                                                 download_id,
                                                 UploadHandle {
                                                     is_cancelled: false,
@@ -326,7 +362,7 @@ async fn handle_tcp_message<'a>(
 
                                             upload_file(
                                                 file_handle,
-                                                &data.client_data.uploads,
+                                                &data.uploads,
                                                 &download_id,
                                                 data.tcp_write,
                                             )
@@ -341,7 +377,6 @@ async fn handle_tcp_message<'a>(
             };
 
             if let Err(e) = result {
-                data.client_data.uploads.remove(&download_id);
                 let _ = data
                     .tcp_write
                     .send(TcpMessage::DownloadError {
@@ -351,7 +386,7 @@ async fn handle_tcp_message<'a>(
                     .await?;
             }
 
-            data.client_data.uploads.remove(&download_id);
+            data.uploads.remove(&download_id);
 
             Ok(())
         }
@@ -360,7 +395,7 @@ async fn handle_tcp_message<'a>(
             download_id,
             data: raw_data,
         } => {
-            let download = data.client_data.downloads.get_mut(&download_id);
+            let download = data.downloads.get_mut(&download_id);
 
             let result = match download {
                 None => {
@@ -372,14 +407,8 @@ async fn handle_tcp_message<'a>(
                     let res = download.output_file.write_all(&raw_data).await;
 
                     match res {
-                        Err(e) => Err(BackendError {
-                            error: String::from(format!(
-                                "Could not write downloaded data to file: {}",
-                                e.to_string()
-                            )),
-                            title: String::from("Download Failure"),
-                        }),
-                        core::result::Result::Ok(_) => {
+                        Err(e) => Err(DownloadError::WriteError),
+                        Ok(_) => {
                             let bytes_received = u64::try_from(raw_data.len())
                                 .expect("app should be running on a 64 bit system");
                             download.bytes_done += bytes_received;
@@ -387,24 +416,20 @@ async fn handle_tcp_message<'a>(
                             let percent = u8::try_from(download.bytes_done / download.bytes_total);
 
                             match percent {
-                                Err(_) => Err(BackendError {
-                                    error: String::from("Downloaded file is larger than expected"),
-                                    title: String::from("Download Failure"),
-                                }),
-                                core::result::Result::Ok(percent) => {
+                                Err(_) => Err(DownloadError::FileTooLarge),
+                                Ok(percent) => {
                                     let percent = u8::clamp(percent, 0, 100);
                                     let _ = data
                                         .client_data
                                         .server
                                         .channel
                                         .send(MessageToServer::DownloadUpdate {
-                                            client_id: data.client_data.addr,
                                             download_id,
                                             new_progress: percent,
                                         })
                                         .await?;
 
-                                    core::result::Result::Ok(())
+                                    Ok(())
                                 }
                             }
                         }
@@ -413,13 +438,13 @@ async fn handle_tcp_message<'a>(
             };
 
             if let Err(e) = result {
-                data.client_data.downloads.remove(&download_id);
+                data.downloads.remove(&download_id);
                 let _ = data
                     .client_data
                     .server
                     .channel
                     .send(MessageToServer::CanceledDownload {
-                        client_id: data.client_data.addr,
+                        cancel_reason: e.to_string(),
                         download_id,
                     })
                     .await?;
@@ -431,14 +456,14 @@ async fn handle_tcp_message<'a>(
         TcpMessage::DownloadError { error, download_id } => {
             error!("Download error: {:?}", error);
 
-            if data.client_data.downloads.contains_key(&download_id) {
-                data.client_data.downloads.remove(&download_id);
+            if data.downloads.contains_key(&download_id) {
+                data.downloads.remove(&download_id);
                 let _ = data
                     .client_data
                     .server
                     .channel
                     .send(MessageToServer::CanceledDownload {
-                        client_id: data.client_data.addr,
+                        cancel_reason: error.to_string(),
                         download_id,
                     })
                     .await?;
@@ -447,55 +472,26 @@ async fn handle_tcp_message<'a>(
             Ok(())
         }
 
-        TcpMessage::ReceiveFileEnd {
-            download_id,
-            data: raw_data,
-        } => {
-            let download = data.client_data.downloads.get_mut(&download_id);
+        TcpMessage::ReceiveFileEnd { download_id, } => {
+            let download = data.downloads.get_mut(&download_id);
 
-            let result = match download {
+            match download {
                 None => {
                     error!("Received file end for unknown download");
 
                     Ok(())
                 },
-                Some(download) => {
-                    let result = if raw_data.len() > 0 {
-                        let res = download.output_file.write_all(&raw_data).await;
-
-                        match res {
-                            Err(e) => Err(BackendError {
-                                error: format!(
-                                    "Could not finish download, because {}.",
-                                    e.to_string()
-                                ),
-                                title: "Download Failure".to_owned(),
-                            }),
-                            Ok(_) => Ok(()),
-                        }
-                    } else {
-                        Ok(())
-                    };
-
-                    result
-                }
-            };
-
-            data.client_data.downloads.remove(&download_id);
-
-            if let Err(_) = result {
-                let _ = data
-                    .client_data
-                    .server
-                    .channel
-                    .send(MessageToServer::CanceledDownload {
-                        client_id: data.client_data.addr,
+                Some(_) => {
+                    let _ = data.client_data.server.channel.send(MessageToServer::DownloadUpdate {
                         download_id,
-                    })
-                    .await?;
-            }
+                        new_progress: 100,
+                    }).await?;
 
-            Ok(())
+                    data.downloads.remove(&download_id);
+
+                    Ok(())
+                }
+            }
         }
     }
 }
@@ -577,34 +573,33 @@ async fn handle_server_messages(
             let directory = directories.get(&directory_identifier);
 
             let result = match directory {
-                None => Err(anyhow!("Directory does not exist")),
+                None => Err(DownloadError::DirectoryMissing),
                 Some(dir) => {
                     let file = dir.shared_files.get(&file_identifier);
 
                     match file {
-                        None => Err(anyhow!("File does not exist")),
+                        None => Err(DownloadError::FileMissing),
                         Some(file) => match &file.content_location {
                             ContentLocation::LocalPath(_) => {
-                                Err(anyhow!("File has already been downloaded"))
+                                error!("File has already been downloaded");
+
+                                return Ok(());
                             }
                             ContentLocation::NetworkOnly => {
-                                let file_path = destination.join(&file.name);
-                                let file_path = if file_path.exists() {
-                                    destination.join(download_id.to_string())
-                                } else {
-                                    file_path
-                                };
-
-                                let file_handle = File::create(file_path).await;
+                                let file_handle = File::create(&destination).await;
                                 match file_handle {
-                                    Err(e) => Err(anyhow!(e)),
-                                    core::result::Result::Ok(file_handle) => {
-                                        data.client_data.downloads.insert(
+                                    Err(e) => Err(DownloadError::WriteError),
+                                    Ok(file_handle) => {
+                                        data.downloads.insert(
                                             download_id,
                                             DownloadHandle {
+                                                canceled: false,
                                                 bytes_total: file.size,
                                                 bytes_done: 0,
                                                 output_file: file_handle,
+                                                output_path: destination,
+                                                file_id: file_identifier,
+                                                dir_id: directory_identifier
                                             },
                                         );
 
@@ -626,14 +621,14 @@ async fn handle_server_messages(
                 }
             };
 
-            if let Err(_) = result {
-                data.client_data.downloads.remove(&download_id);
+            if let Err(e) = result {
+                data.downloads.remove(&download_id);
                 let _ = data
                     .client_data
                     .server
                     .channel
                     .send(MessageToServer::CanceledDownload {
-                        client_id: data.client_data.addr,
+                        cancel_reason: e.to_string(),
                         download_id,
                     })
                     .await?;
@@ -677,7 +672,6 @@ async fn upload_file(
                     let msg = if n == 0 {
                         TcpMessage::ReceiveFileEnd {
                             download_id: *download_id,
-                            data: vec![],
                         }
                     } else {
                         TcpMessage::ReceiveFilePart {
@@ -696,7 +690,7 @@ async fn upload_file(
                                 continue;
                             }
                         }
-                        Err(_) => return Err(DownloadError::Canceled),
+                        Err(_) => return Err(DownloadError::Disconnected),
                     }
                 }
                 Err(e) => {

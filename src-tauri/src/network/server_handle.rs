@@ -1,6 +1,7 @@
 use std::{
     cmp::Eq,
     collections::{HashMap, HashSet, VecDeque},
+    fmt::Display,
     fs::File,
     hash::Hash,
     net::{IpAddr, SocketAddr, SocketAddrV4},
@@ -8,7 +9,7 @@ use std::{
     str::FromStr,
     sync::Arc,
     time::Duration,
-    vec, fmt::Display,
+    vec,
 };
 
 use anyhow::{anyhow, bail, Result};
@@ -38,7 +39,7 @@ use crate::{
 };
 
 use super::{
-    client_handle::{client_loop, ClientData, MessageFromServer},
+    client_handle::{client_loop, ClientData, MessageFromServer, DownloadError},
     mdns::MessageToMdns,
 };
 
@@ -59,17 +60,37 @@ pub struct ClientHandle {
     pub join: JoinHandle<()>,
     pub service_info: Option<ServiceInfo>,
     pub job_queue: VecDeque<MessageFromServer>,
-    pub ongoing_downloads: HashMap<Uuid, Download>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Download {
+    pub download_id: Uuid,
     pub file_identifier: Uuid,
     pub directory_identifier: Uuid,
     pub progress: u8,
     pub file_name: String,
-    pub canceled: bool,
+    pub file_path: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct DownloadUpdate {
+    pub progress: u8,
+    pub download_id: Uuid,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct DownloadCanceled {
+    pub reason: String,
+    pub download_id: Uuid,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+struct DownloadNotStarted {
+    pub reason: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -91,21 +112,15 @@ pub enum MessageToServer {
     UpdatedDirectory(Uuid),
 
     StartedDownload {
-        client_id: ClientConnectionId,
-        download_id: Uuid,
+        download_info: Download
     },
     DownloadUpdate {
-        client_id: ClientConnectionId,
         download_id: Uuid,
         new_progress: u8,
     },
-    FinishedDownload {
-        client_id: ClientConnectionId,
-        download_id: Uuid,
-    },
     CanceledDownload {
-        client_id: ClientConnectionId,
         download_id: Uuid,
+        cancel_reason: String
     },
 
     SharedDirectory(ShareDirectory),
@@ -166,9 +181,10 @@ impl WindowAction {
     pub const UPDATE_SHARE_DIRECTORIES: &str = "UpdateShareDirectories";
     pub const GET_PEERS: &str = "GetPeers";
     pub const NEW_SHARE_DIRECTORY: &str = "NewShareDirectory";
-    pub const DOWNLOADING_FILE: &str = "DownloadingFile";
     pub const ERROR: &str = "Error";
-    pub const CANCELED_DOWNLOAD: &str = "CanceledDownload";
+    pub const DOWNLOAD_STARTED: &str = "DownloadStarted";
+    pub const DOWNLOAD_UPDATE: &str = "DownloadUpdate";
+    pub const DOWNLOAD_CANCELED: &str = "CanceledDownload";
 }
 
 pub async fn server_loop(
@@ -468,155 +484,48 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
         }
 
         MessageToServer::StartedDownload {
-            download_id,
-            client_id,
+            download_info
         } => {
-            let clients = server_data.clients.lock().await;
-            let client = clients.get(&client_id);
-
-            let result = match client {
-                None => Err(BackendError {
-                    error: String::from("Device must have disconnected. Try again later."),
-                    title: String::from("Download failure"),
-                }),
-                Some(client) => {
-                    let download = client.ongoing_downloads.get(&download_id);
-
-                    match download {
-                        None => Err(BackendError {
-                            error: String::from("Could not start download."),
-                            title: String::from("Download failure"),
-                        }),
-                        Some(download) => {
-                            let _ = server_data.window_manager.emit_to(
-                                MAIN_WINDOW_LABEL,
-                                WindowAction::DOWNLOADING_FILE,
-                                download,
-                            );
-
-                            Ok(())
-                        }
-                    }
-                }
-            };
-
-            if let Err(e) = result {
-                let _ = server_data.window_manager.emit_to(
-                    MAIN_WINDOW_LABEL,
-                    WindowAction::ERROR,
-                    e,
-                )?;
-            }
+            
+            let _ = server_data.window_manager.emit_to(
+                MAIN_WINDOW_LABEL,
+                WindowAction::DOWNLOAD_STARTED,
+                download_info,
+            )?;
 
             Ok(())
         }
 
-        MessageToServer::DownloadUpdate { client_id, download_id, new_progress } => {
-            let mut clients = server_data.clients.lock().await;
-            let client = clients.get_mut(&client_id);
+        MessageToServer::DownloadUpdate {
+            download_id,
+            new_progress,
+        } => {
 
-            let result = match client {
-                None => Err(BackendError {
-                    error: String::from("Client must have disconnected"),
-                    title: String::from("Download Error")
-                }),
-                Some(client) => {
-                    let download = client.ongoing_downloads.get_mut(&download_id);
-
-                    let result = match download {
-                        None => Err(BackendError { error: String::from("Could not update download."), title: String::from("Download Failure") }),
-                        Some(download) => {
-                            download.progress = new_progress;
-                            let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::DOWNLOADING_FILE, download.clone());
-
-                            Ok(())
-                        }
-                    };
-
-                    if let Err(_) = result {
-                        client.ongoing_downloads.remove(&download_id);
-                    } 
-
-                    result
-                }
-            };
-
-            if let Err(e) = result {
-                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::ERROR, e)?;
-                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::CANCELED_DOWNLOAD, download_id)?;
-            }
+            let _ = server_data.window_manager.emit_to(
+                MAIN_WINDOW_LABEL,
+                WindowAction::DOWNLOAD_UPDATE,
+                DownloadUpdate {
+                    download_id,
+                    progress: new_progress
+                },
+            )?;
 
             Ok(())
         }
 
-        MessageToServer::CanceledDownload { client_id, download_id } => {
-            let mut clients = server_data.clients.lock().await;
-            let client = clients.get_mut(&client_id);
-
-            let result = match client {
-                None => Err(BackendError {
-                    error: String::from("Client must have disconnected."),
-                    title: String::from("Download Error")
-                }),
-                Some(client) => {
-                    let download = client.ongoing_downloads.get_mut(&download_id);
-
-                    let result = match download {
-                        None => Err(BackendError { error: String::from("Download is being cancelled."), title: String::from("Download Failure") }),
-                        Some(download) => {
-                            download.canceled = true;
-                            let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::DOWNLOADING_FILE, download.clone());
-
-                            Ok(())
-                        }
-                    };
-
-                    client.ongoing_downloads.remove(&download_id);
-
-                    result
-                }
-            };
-
-            if let Err(e) = result {
-                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::ERROR, e)?;
-                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::CANCELED_DOWNLOAD, download_id)?;
-            }
-
-            Ok(())
-        }
-
-        MessageToServer::FinishedDownload { client_id, download_id } => {
-            let mut clients = server_data.clients.lock().await;
-            let client = clients.get_mut(&client_id);
-
-            let result = match client {
-                None => Err(BackendError {
-                    error: String::from("Client must have disconnected"),
-                    title: String::from("Download Error")
-                }),
-                Some(client) => {
-                    let download = client.ongoing_downloads.get_mut(&download_id);
-
-                    let result = match download {
-                        None => Err(BackendError { error: String::from("Could not finish download."), title: String::from("Download Failure") }),
-                        Some(download) => {
-                            download.progress = 100;
-                            let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::DOWNLOADING_FILE, download.clone());
-
-                            Ok(())
-                        }
-                    };
-
-                    client.ongoing_downloads.remove(&download_id);
-
-                    result
-                }
-            };
-
-            if let Err(e) = result {
-                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::ERROR, e)?;
-                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::CANCELED_DOWNLOAD, download_id)?;
-            }
+        MessageToServer::CanceledDownload {
+            download_id,
+            cancel_reason,
+        } => {
+            
+            let _ = server_data.window_manager.emit_to(
+                MAIN_WINDOW_LABEL,
+                WindowAction::DOWNLOAD_CANCELED,
+                DownloadCanceled {
+                    download_id,
+                    reason: cancel_reason
+                },
+            )?;
 
             Ok(())
         }
@@ -801,71 +710,59 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             let directories = server_data.server_handle.config.cached_data.lock().await;
             let dir_id = Uuid::parse_str(&directory_identifier)?;
             let file_id = Uuid::parse_str(&file_identifier)?;
-            let directory = directories.get(&dir_id);
 
-            let result = match directory {
-                None => Err(BackendError {
-                    error: "Directory not found.".to_owned(),
-                    title: "Download Failure".to_owned(),
-                }),
-                Some(dir) => {
-                    let file = dir.shared_files.get(&file_id);
+            let files = get_file(&*directories, dir_id, file_id);
+            let result = match files {
+                None => Err(DownloadError::DirectoryMissing),
+                Some((_, file)) => {
+                    let mut clients = server_data.clients.lock().await;
+                    let client = clients.iter_mut().find(|(_, c)| {
+                        if let Some(id) = &c.id {
+                            return file.owned_peers.contains(id);
+                        }
 
-                    match file {
-                        None => Err(BackendError {
-                            error: "File not found.".to_owned(),
-                            title: "Download Failure".to_owned(),
-                        }),
-                        Some(file) => {
-                            let mut clients = server_data.clients.lock().await;
-                            let client = clients.iter_mut().find(|(_, c)| {
-                                if let Some(id) = &c.id {
-                                    return file.owned_peers.contains(id);
-                                }
+                        return false;
+                    });
 
-                                return false;
-                            });
+                    match client {
+                        None => Err(DownloadError::NoClientsConnected),
+                        Some((_, c)) => {
+                            let download_id = Uuid::new_v4();
+                            let app_config =
+                                server_data.server_handle.config.app_config.lock().await;
 
-                            match client {
-                                None => Err(BackendError {
-                                    error: "No connected clients that have this file.".to_owned(),
-                                    title: "Download Failure".to_owned(),
-                                }),
-                                Some((_, c)) => {
-                                    let download_id = Uuid::new_v4();
+                            let download_directory = app_config.download_directory.clone();
+                            let file_path = download_directory.join(&file.name);
+                            let file_path = if file_path.exists() {
+                                download_directory.join(download_id.to_string())
+                            } else {
+                                file_path
+                            };
 
-                                    let new_download = Download {
-                                        file_identifier: file_id,
-                                        directory_identifier: dir_id,
-                                        progress: 0,
-                                        file_name: file.name.clone(),
-                                        canceled: false,
-                                    };
+                            let _ = c
+                                .sender
+                                .send(MessageFromServer::StartDownload {
+                                    download_id,
+                                    file_identifier: file_id,
+                                    directory_identifier: dir_id,
+                                    destination: file_path,
+                                })
+                                .await?;
 
-                                    c.ongoing_downloads.insert(download_id, new_download);
-                                    let app_config =
-                                        server_data.server_handle.config.app_config.lock().await;
-
-                                    let _ = c
-                                        .sender
-                                        .send(MessageFromServer::StartDownload {
-                                            download_id,
-                                            file_identifier: file_id,
-                                            directory_identifier: dir_id,
-                                            destination: app_config.download_directory.clone(),
-                                        })
-                                        .await?;
-
-                                    Ok(())
-                                }
-                            }
+                            Ok(())
                         }
                     }
                 }
             };
 
             if let Err(e) = result {
-                let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::ERROR, e)?;
+                let _ = server_data.window_manager.emit_to(
+                    MAIN_WINDOW_LABEL,
+                    WindowAction::DOWNLOAD_CANCELED,
+                    DownloadNotStarted {
+                        reason: e.to_string(),
+                    },
+                )?;
             }
 
             Ok(())
@@ -888,8 +785,6 @@ async fn add_client<'a>(
         server: server_handle,
         receiver,
         addr,
-        downloads: HashMap::new(),
-        uploads: HashMap::new(),
     };
 
     let pid = match &service_info {
@@ -915,7 +810,6 @@ async fn add_client<'a>(
         join,
         service_info,
         job_queue,
-        ongoing_downloads: HashMap::new(),
     };
 
     let _ = clients.insert(addr, client);
@@ -960,4 +854,54 @@ async fn create_shared_file(file_path: String, this_peer: &PeerId) -> Result<Sha
         owned_peers: vec![this_peer.clone()],
         size,
     })
+}
+
+fn get_file(
+    directories: &HashMap<Uuid, ShareDirectory>,
+    dir_id: Uuid,
+    file_id: Uuid,
+) -> Option<(&ShareDirectory, &SharedFile)> {
+    let directory = directories.get(&dir_id);
+
+    match directory {
+        None => None,
+        Some(directory) => {
+            let file = directory.shared_files.get(&file_id);
+
+            match file {
+                None => None,
+                Some(file) => Some((directory, file)),
+            }
+        }
+    }
+}
+
+fn update_downloaded_file(directories: &mut HashMap<Uuid, ShareDirectory>, myself: &PeerId, download: &Download) -> Result<Vec<PeerId>, BackendError> {
+    let directory = directories.get_mut(&download.directory_identifier);
+
+    match directory {
+        None => Err(BackendError {
+            error: format!(
+                "Directory {} does not exist.",
+                download.directory_identifier
+            ),
+            title: "Download Failure".to_owned(),
+        }),
+        Some(directory) => {
+            let file = directory.shared_files.get_mut(&download.file_identifier);
+
+            match file {
+                None => Err(BackendError {
+                    error: format!("File {} does not exist.", download.file_name),
+                    title: "Download Failure".to_owned(),
+                }),
+                Some(file) => {
+                    file.owned_peers.push(myself.clone());
+                    file.content_location = ContentLocation::LocalPath(download.file_path.clone());
+
+                    Ok(file.owned_peers.clone())
+                }
+            }
+        }
+    }
 }
