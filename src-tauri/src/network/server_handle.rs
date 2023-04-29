@@ -339,12 +339,15 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
         MessageToServer::SetPeerId(addr, id) => {
             let mut clients = server_data.clients.lock().await;
+            let mut peer_ids: Vec<PeerId> = clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
             let client = clients.get_mut(&addr);
 
             match client {
                 Some(client) => {
-                    client.id = Some(id);
+                    client.id = Some(id.clone());
+                    peer_ids.push(id);
 
+                    let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::GET_PEERS, peer_ids)?;
                     let _ = client.sender.send(MessageFromServer::Synchronize).await?;
 
                     Ok(())
@@ -354,11 +357,23 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
         }
 
         MessageToServer::KillClient(client_addr) => {
-            let client = server_data.clients.lock().await.remove(&client_addr);
+            let mut clients = server_data.clients.lock().await;
+            let mut peer_ids: Vec<PeerId> = clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
+            let client = clients.remove(&client_addr);
 
             match client {
                 Some(client) => {
+                    let disconnected_peer_id = client.id.clone();
                     disconnected_client(client, server_data.mdns_sender).await;
+
+                    match disconnected_peer_id {
+                        None => (),
+                        Some(id) => {
+                            peer_ids.retain(|peer| peer != &id);
+                        }
+                    }
+
+                    let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::GET_PEERS, peer_ids)?;
 
                     Ok(())
                 }

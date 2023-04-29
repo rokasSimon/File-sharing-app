@@ -354,6 +354,7 @@ function Directories() {
       files={selectedDirectory.shared_files}
       directoryName={selectedDirectory.signature.name}
       directoryIdentifier={selectedDirectory.signature.identifier}
+      currentPeers={peers}
     />
   ) : null;
 

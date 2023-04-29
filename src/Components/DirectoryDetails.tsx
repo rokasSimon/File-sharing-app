@@ -30,7 +30,7 @@ import FolderIcon from "@mui/icons-material/Folder";
 import DownloadIcon from "@mui/icons-material/Download";
 import DeleteIcon from "@mui/icons-material/Delete";
 import DownloadDoneIcon from "@mui/icons-material/DownloadDone";
-import { SharedFile } from "../RustCommands/ShareDirectoryContext";
+import { PeerId, SharedFile } from "../RustCommands/ShareDirectoryContext";
 
 import { open } from "@tauri-apps/api/dialog";
 import {
@@ -47,6 +47,7 @@ type DirectoryDetailsProps = {
   files: Map<string, SharedFile>;
   directoryName: string;
   directoryIdentifier: string;
+  currentPeers: Array<PeerId>;
 };
 
 function toLargestDenominator(size: number): string {
@@ -63,9 +64,9 @@ function DirectoryDetails({
   files,
   directoryName,
   directoryIdentifier,
+  currentPeers,
 }: DirectoryDetailsProps) {
   const [fileDetails, setFileDetails] = React.useState<SharedFile | null>(null);
-  const peers = React.useContext(ConnectedDevicesContext);
   const detailsOpen = Boolean(fileDetails);
 
   const handleAddFiles = async () => {
@@ -140,7 +141,7 @@ function DirectoryDetails({
   let rows = [];
   for (const [id, file] of files.entries()) {
     const fileIsDownloadable = file.ownedPeers.find((peer) => {
-      for (const connectedPeer of peers) {
+      for (const connectedPeer of currentPeers) {
         if (
           connectedPeer.hostname === peer.hostname &&
           connectedPeer.uuid === peer.uuid
