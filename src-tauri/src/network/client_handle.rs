@@ -488,7 +488,7 @@ async fn handle_tcp_message<'a>(
         }
 
         TcpMessage::ReceiveFileEnd { download_id } => {
-            if data.downloads.contains_key(&download_id) {
+            if !data.downloads.contains_key(&download_id) {
                 error!("Received file end for unknown download");
 
                 return Ok(());
