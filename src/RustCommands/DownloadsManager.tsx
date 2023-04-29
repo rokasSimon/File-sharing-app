@@ -18,6 +18,7 @@ type Download = {
   progress: number;
   fileName: string;
   filePath: string;
+  canceled: boolean;
 };
 
 type DownloadUpdate = {
@@ -30,12 +31,8 @@ type DownloadCanceled = {
   downloadId: string;
 };
 
-const initialState: Array<Download> = [];
-// const DownloadsContext =
-//   React.createContext<Array<DownloadingFile>>(initialState);
-
 function DownloadsManager({ children }: any) {
-  const [downloads, setDownloads] = React.useState(initialState);
+  const [downloads, setDownloads] = React.useState<Download[]>([]);
   const downloadsRef = React.useRef(downloads);
   const loaded = React.useRef(false);
 
@@ -79,9 +76,23 @@ function DownloadsManager({ children }: any) {
       const _ = await listen<DownloadCanceled>("DownloadCanceled", (event) => {
         const input = event.payload;
 
-        // const currentDownloads = [input, ...downloadsRef.current];
+        const alreadyDownloading = downloadsRef.current.find((download) => {
+          return download.downloadId === input.downloadId;
+        });
 
-        // setDownloads(currentDownloads);
+        if (alreadyDownloading) {
+          alreadyDownloading.canceled = true;
+        }
+
+        setDownloads([ ...downloadsRef.current ]);
+
+        setTimeout(() => {
+          const downloadsToKeep = downloadsRef.current.filter((download) => {
+            return download.downloadId !== alreadyDownloading?.downloadId;
+          });
+
+          setDownloads(downloadsToKeep);
+        }, 5000);
       });
     };
 
@@ -107,6 +118,8 @@ function DownloadsManager({ children }: any) {
   };
 
   const downloadIndicators = downloads.map((download) => {
+    const color = download.canceled ? "error" : "primary";
+
     return (
       <Paper
         elevation={2}
@@ -121,7 +134,7 @@ function DownloadsManager({ children }: any) {
             <ClearIcon fontSize="small" />
           </IconButton>
         </Box>
-        <LinearProgress variant="determinate" value={download.progress} />
+        <LinearProgress variant="determinate" value={download.progress} color={color} />
       </Paper>
     );
   });
