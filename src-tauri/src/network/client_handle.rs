@@ -440,6 +440,8 @@ async fn handle_tcp_message<'a>(
             dir_id,
         } => {
 
+            info!("Started uploading");
+
             let mut directories = data.client_data.server.config.cached_data.lock().await;
             let result = start_upload(&mut directories, dir_id, file_id).await;
 
@@ -457,6 +459,7 @@ async fn handle_tcp_message<'a>(
                     uploads.insert(download_id, handle);
 
                     *data.uploading = true;
+                    info!("Successfully added upload handle");
                 }
             }
 
@@ -964,9 +967,9 @@ async fn start_upload(
         ContentLocation::LocalPath(path) => path.clone()
     };
 
-    let file = File::create(file_path).await;
+    let file = File::open(file_path).await;
     let file = match file {
-        Err(e) => return Err(DownloadError::WriteError),
+        Err(_) => return Err(DownloadError::WriteError),
         Ok(file) => file,
     };
 
