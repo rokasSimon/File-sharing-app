@@ -63,6 +63,10 @@ pub enum TcpMessage {
     },
 
     SharedDirectory(ShareDirectory),
+    LeftDirectory {
+        directory_identifier: Uuid,
+        date_modified: DateTime<Utc>,
+    },
 }
 
 pub struct MessageCodec {

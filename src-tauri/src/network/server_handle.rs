@@ -182,6 +182,9 @@ pub enum WindowRequest {
         peer: PeerId,
         download_identifier: String,
     },
+    LeaveDirectory {
+        directory_identifier: String,
+    },
 }
 
 pub struct WindowAction;
@@ -664,6 +667,25 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             Ok(())
         }
 
+        WindowRequest::LeaveDirectory {
+            directory_identifier,
+        } => {
+            let mut directories = server_data.server_handle.config.cached_data.lock().await;
+            let dir_id = Uuid::parse_str(&directory_identifier)?;
+            let directory = directories.remove(&dir_id);
+            let directory = match directory {
+                None => return Err(anyhow!("User is trying to leave directory that does not exist")),
+                Some(dir) => dir,
+            };
+
+            server_data.broadcast(&directory.signature.shared_peers, MessageFromServer::LeftDirectory { directory_identifier: dir_id }).await;
+
+            let directories_data = directories.values().cloned().collect::<Vec<ShareDirectory>>();
+            let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UPDATE_SHARE_DIRECTORIES, directories_data);
+
+            Ok(())
+        }
+
         WindowRequest::AddFiles {
             file_paths,
             directory_identifier,
@@ -677,6 +699,22 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                 for file_path in file_paths {
                     let shared_file =
                         create_shared_file(file_path, &server_data.server_handle.peer_id).await?;
+
+                    for (_, file) in dir.shared_files.iter() {
+                        if file.content_hash == shared_file.content_hash {
+                            let _ = server_data.window_manager.emit_to(
+                                MAIN_WINDOW_LABEL,
+                                WindowAction::ERROR,
+                                BackendError {
+                                    title: "File Error".to_owned(),
+                                    error: "File has already been added to this directory"
+                                        .to_owned(),
+                                },
+                            )?;
+
+                            return Ok(());
+                        }
+                    }
 
                     shared_files.push(shared_file);
                 }

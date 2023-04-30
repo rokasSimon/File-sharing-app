@@ -16,12 +16,26 @@ pub struct ShareDirectory {
 }
 
 impl ShareDirectory {
+    pub fn remove_peer(&mut self, peer: &PeerId, date_modified: DateTime<Utc>) {
+        self.signature.last_modified = date_modified;
+
+        self.signature.shared_peers.retain(|p| {
+            p != peer
+        });
+
+        for (_, file) in self.shared_files.iter_mut() {
+            file.owned_peers.retain(|p| p != peer);
+        }
+
+        self.shared_files.retain(|_, file| file.owned_peers.len() != 0);
+    }
+
     pub fn add_files(&mut self, files: Vec<SharedFile>, date_modified: DateTime<Utc>) {
+        self.signature.last_modified = date_modified;
+
         for file in files {
             self.shared_files.insert(file.identifier, file);
         }
-
-        self.signature.last_modified = date_modified;
     }
 
     pub fn delete_files(

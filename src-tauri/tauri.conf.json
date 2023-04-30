@@ -49,7 +49,7 @@
         "all": false,
         "ask": false,
         "confirm": false,
-        "message": false,
+        "message": true,
         "open": true,
         "save": true
       }

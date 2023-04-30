@@ -1,7 +1,9 @@
 import {
+  Backdrop,
   Box,
   Breadcrumbs,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -42,6 +44,7 @@ import {
 import React from "react";
 import { invoke } from "@tauri-apps/api";
 import { ConnectedDevicesContext } from "../RustCommands/ConnectedDevicesContext";
+import { ErrorContext } from "../App";
 
 type DirectoryDetailsProps = {
   files: Map<string, SharedFile>;
@@ -66,8 +69,18 @@ function DirectoryDetails({
   directoryIdentifier,
   currentPeers,
 }: DirectoryDetailsProps) {
+  const [addingFiles, setAddingFiles] = React.useState(false);
   const [fileDetails, setFileDetails] = React.useState<SharedFile | null>(null);
   const detailsOpen = Boolean(fileDetails);
+  const error = React.useContext(ErrorContext);
+
+  React.useEffect(() => {
+    setAddingFiles(false);
+  }, [files]);
+
+  React.useEffect(() => {
+    setAddingFiles(false);
+  }, [error]);
 
   const handleAddFiles = async () => {
     const selected = await open({
@@ -85,6 +98,7 @@ function DirectoryDetails({
       };
 
       await invokeNetworkCommand(request);
+      setAddingFiles(true);
     }
   };
 
@@ -208,6 +222,12 @@ function DirectoryDetails({
 
   return (
     <React.Fragment>
+      <Backdrop
+        sx={{ color: '#fff', zIndex: (theme: any) => theme.zIndex.drawer + 1 }}
+        open={addingFiles}
+      >
+        <CircularProgress color="inherit" />
+      </Backdrop>
       <Box sx={{ height: "100%", margin: "1em", marginRight: "2.5em" }}>
         <Box
           display={"flex"}

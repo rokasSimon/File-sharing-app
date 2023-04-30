@@ -1,10 +1,10 @@
 # Details
 
-Date : 2023-04-30 11:35:53
+Date : 2023-04-30 19:23:19
 
 Directory e:\\DEV\\Rust\\file-sharing-app
 
-Total : 41 files,  34198 codes, 58 comments, 743 blanks, all 34999 lines
+Total : 41 files,  34343 codes, 39 comments, 764 blanks, all 35146 lines
 
 [Summary](results.md) / Details / [Diff Summary](diff.md) / [Diff Details](diff-details.md)
 
@@ -20,13 +20,13 @@ Total : 41 files,  34198 codes, 58 comments, 743 blanks, all 34999 lines
 | [src-tauri/Cargo.toml](/src-tauri/Cargo.toml) | TOML | 38 | 5 | 5 | 48 |
 | [src-tauri/build.rs](/src-tauri/build.rs) | Rust | 3 | 0 | 1 | 4 |
 | [src-tauri/src/config.rs](/src-tauri/src/config.rs) | Rust | 100 | 0 | 27 | 127 |
-| [src-tauri/src/data.rs](/src-tauri/src/data.rs) | Rust | 77 | 0 | 16 | 93 |
+| [src-tauri/src/data.rs](/src-tauri/src/data.rs) | Rust | 91 | 0 | 19 | 110 |
 | [src-tauri/src/main.rs](/src-tauri/src/main.rs) | Rust | 102 | 0 | 21 | 123 |
 | [src-tauri/src/network.rs](/src-tauri/src/network.rs) | Rust | 45 | 0 | 10 | 55 |
-| [src-tauri/src/network/client_handle.rs](/src-tauri/src/network/client_handle.rs) | Rust | 676 | 0 | 130 | 806 |
-| [src-tauri/src/network/codec.rs](/src-tauri/src/network/codec.rs) | Rust | 115 | 1 | 36 | 152 |
+| [src-tauri/src/network/client_handle.rs](/src-tauri/src/network/client_handle.rs) | Rust | 775 | 1 | 156 | 932 |
+| [src-tauri/src/network/codec.rs](/src-tauri/src/network/codec.rs) | Rust | 122 | 2 | 37 | 161 |
 | [src-tauri/src/network/mdns.rs](/src-tauri/src/network/mdns.rs) | Rust | 152 | 0 | 30 | 182 |
-| [src-tauri/src/network/server_handle.rs](/src-tauri/src/network/server_handle.rs) | Rust | 810 | 0 | 153 | 963 |
+| [src-tauri/src/network/server_handle.rs](/src-tauri/src/network/server_handle.rs) | Rust | 836 | 0 | 150 | 986 |
 | [src-tauri/src/network/tcp_listener.rs](/src-tauri/src/network/tcp_listener.rs) | Rust | 19 | 0 | 7 | 26 |
 | [src-tauri/src/peer_id.rs](/src-tauri/src/peer_id.rs) | Rust | 44 | 0 | 12 | 56 |
 | [src-tauri/src/window.rs](/src-tauri/src/window.rs) | Rust | 17 | 0 | 6 | 23 |
@@ -40,14 +40,14 @@ Total : 41 files,  34198 codes, 58 comments, 743 blanks, all 34999 lines
 | [src/Components/ResizableBox.css](/src/Components/ResizableBox.css) | CSS | 39 | 0 | 6 | 45 |
 | [src/Components/ResizableBox.tsx](/src/Components/ResizableBox.tsx) | TypeScript JSX | 51 | 0 | 8 | 59 |
 | [src/RustCommands/ConnectedDevicesContext.tsx](/src/RustCommands/ConnectedDevicesContext.tsx) | TypeScript JSX | 45 | 0 | 14 | 59 |
-| [src/RustCommands/DownloadsManager.tsx](/src/RustCommands/DownloadsManager.tsx) | TypeScript JSX | 142 | 0 | 31 | 173 |
-| [src/RustCommands/ShareDirectoryContext.tsx](/src/RustCommands/ShareDirectoryContext.tsx) | TypeScript JSX | 142 | 21 | 39 | 202 |
-| [src/RustCommands/networkCommands.tsx](/src/RustCommands/networkCommands.tsx) | TypeScript JSX | 48 | 0 | 12 | 60 |
+| [src/RustCommands/DownloadsManager.tsx](/src/RustCommands/DownloadsManager.tsx) | TypeScript JSX | 144 | 0 | 31 | 175 |
+| [src/RustCommands/ShareDirectoryContext.tsx](/src/RustCommands/ShareDirectoryContext.tsx) | TypeScript JSX | 136 | 0 | 33 | 169 |
+| [src/RustCommands/networkCommands.tsx](/src/RustCommands/networkCommands.tsx) | TypeScript JSX | 49 | 0 | 12 | 61 |
 | [src/index.css](/src/index.css) | CSS | 28 | 0 | 6 | 34 |
 | [src/index.tsx](/src/index.tsx) | TypeScript JSX | 33 | 3 | 7 | 43 |
 | [src/logo.svg](/src/logo.svg) | XML | 1 | 0 | 0 | 1 |
 | [src/pages/Directories.css](/src/pages/Directories.css) | CSS | 48 | 0 | 10 | 58 |
-| [src/pages/Directories.tsx](/src/pages/Directories.tsx) | TypeScript JSX | 370 | 0 | 52 | 422 |
+| [src/pages/Directories.tsx](/src/pages/Directories.tsx) | TypeScript JSX | 372 | 0 | 52 | 424 |
 | [src/react-app-env.d.ts](/src/react-app-env.d.ts) | TypeScript | 0 | 1 | 1 | 2 |
 | [src/reportWebVitals.ts](/src/reportWebVitals.ts) | TypeScript | 13 | 0 | 3 | 16 |
 | [src/setupTests.ts](/src/setupTests.ts) | TypeScript | 1 | 4 | 1 | 6 |

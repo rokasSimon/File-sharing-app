@@ -15,7 +15,7 @@ import { ShareDirectoryProvider } from "./RustCommands/ShareDirectoryContext";
 import { ConnectedDevicesProvider } from "./RustCommands/ConnectedDevicesContext";
 import { DownloadsManager } from "./RustCommands/DownloadsManager";
 import { listen } from "@tauri-apps/api/event";
-import { message } from '@tauri-apps/api/dialog';
+import { message } from "@tauri-apps/api/dialog";
 
 type BackendError = {
   title: string;
@@ -23,6 +23,7 @@ type BackendError = {
 };
 
 const ThemeContext = React.createContext({ toggleTheme: () => {} });
+const ErrorContext = React.createContext<BackendError | null>(null);
 
 const getDesignTokens = (mode: PaletteMode) => ({
   palette: {
@@ -31,6 +32,7 @@ const getDesignTokens = (mode: PaletteMode) => ({
 });
 
 function App() {
+  const [lastError, setLastError] = React.useState<BackendError | null>(null);
   const [mode, setMode] = React.useState<PaletteMode>("dark");
 
   const toggleTheme = {
@@ -51,7 +53,9 @@ function App() {
       const _ = await listen<BackendError>("Error", async (event) => {
         const input = event.payload;
 
-        await message(input.error, { title: input.title, type: 'error' });
+        setLastError(input);
+
+        await message(input.error, { title: input.title, type: "error" });
       });
     };
 
@@ -63,52 +67,54 @@ function App() {
   return (
     <ThemeContext.Provider value={toggleTheme}>
       <ThemeProvider theme={theme}>
-        <ConnectedDevicesProvider>
-          <ShareDirectoryProvider>
-            <div className="App">
-              <div className="window-nav" data-tauri-drag-region="true">
-                <Menu />
-                <div className="navbar-center">
-                  <p className="navbar-center-text">File Share</p>
+        <ErrorContext.Provider value={lastError}>
+          <ConnectedDevicesProvider>
+            <ShareDirectoryProvider>
+              <div className="App">
+                <div className="window-nav" data-tauri-drag-region="true">
+                  <Menu />
+                  <div className="navbar-center">
+                    <p className="navbar-center-text">File Share</p>
+                  </div>
+                  <div className="navbar-right">
+                    <button
+                      className="window-button"
+                      onClick={() => appWindow.minimize()}
+                    >
+                      <RemoveRoundedIcon className="window-button-icon" />
+                    </button>
+                    <button
+                      className="window-button"
+                      onClick={() => appWindow.toggleMaximize()}
+                    >
+                      <CropSquareRounded className="window-button-icon" />
+                    </button>
+                    <button
+                      className="window-button window-exit"
+                      onClick={() => appWindow.close()}
+                    >
+                      <CloseRoundedIcon className="window-button-icon" />
+                    </button>
+                  </div>
                 </div>
-                <div className="navbar-right">
-                  <button
-                    className="window-button"
-                    onClick={() => appWindow.minimize()}
-                  >
-                    <RemoveRoundedIcon className="window-button-icon" />
-                  </button>
-                  <button
-                    className="window-button"
-                    onClick={() => appWindow.toggleMaximize()}
-                  >
-                    <CropSquareRounded className="window-button-icon" />
-                  </button>
-                  <button
-                    className="window-button window-exit"
-                    onClick={() => appWindow.close()}
-                  >
-                    <CloseRoundedIcon className="window-button-icon" />
-                  </button>
-                </div>
+                <Paper
+                  style={{
+                    flex: "1 1 auto",
+                    padding: "1rem",
+                    borderRadius: 0,
+                  }}
+                >
+                  <DownloadsManager>
+                    <Outlet />
+                  </DownloadsManager>
+                </Paper>
               </div>
-              <Paper
-                style={{
-                  flex: "1 1 auto",
-                  padding: "1rem",
-                  borderRadius: 0,
-                }}
-              >
-                <DownloadsManager>
-                  <Outlet />
-                </DownloadsManager>
-              </Paper>
-            </div>
-          </ShareDirectoryProvider>
-        </ConnectedDevicesProvider>
+            </ShareDirectoryProvider>
+          </ConnectedDevicesProvider>
+        </ErrorContext.Provider>
       </ThemeProvider>
     </ThemeContext.Provider>
   );
 }
 
-export { App, ThemeContext };
+export { App, ThemeContext, ErrorContext };

@@ -1,9 +1,7 @@
 import { invoke } from "@tauri-apps/api/tauri";
 import { PeerId } from "./ShareDirectoryContext";
 
-class BackendCommand {
-
-}
+class BackendCommand {}
 
 interface CreateShareDirectory extends BackendCommand {
     createShareDirectory: string
@@ -48,6 +46,12 @@ interface CancelDownload extends BackendCommand {
     }
 }
 
+interface LeaveDirectory extends BackendCommand {
+    leaveDirectory: {
+        directory_identifier: string,
+    }
+}
+
 async function invokeBackendCommand(command: BackendCommand): Promise<any> {
     console.log(JSON.stringify(command));
     const result = await invoke('network_command', {
@@ -57,5 +61,5 @@ async function invokeBackendCommand(command: BackendCommand): Promise<any> {
     return result;
 }
 
-export type { CreateShareDirectory, GetShareDirectories, AddFiles, ShareDirectoryToPeers, DownloadFile, DeleteFile, CancelDownload };
+export type { CreateShareDirectory, GetShareDirectories, AddFiles, ShareDirectoryToPeers, DownloadFile, DeleteFile, CancelDownload, LeaveDirectory };
 export { invokeBackendCommand as invokeNetworkCommand };

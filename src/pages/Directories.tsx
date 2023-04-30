@@ -27,6 +27,7 @@ import {
 } from "@mui/material";
 import {
   CreateShareDirectory,
+  LeaveDirectory,
   ShareDirectoryToPeers,
   invokeNetworkCommand,
 } from "../RustCommands/networkCommands";
@@ -103,7 +104,7 @@ function Directories() {
   }, [peers, optDirectory]);
 
   const [shareOpen, setShareOpen] = React.useState(false);
-  const [removeOpen, setRemoveOpen] = React.useState(false);
+  const [leaveOpen, setLeaveOpen] = React.useState(false);
 
   const handleOpenCreate = () => {
     setShareCreationName("");
@@ -251,7 +252,7 @@ function Directories() {
     handleShareClose();
   };
 
-  const handleRemoveOpen = (directoryIdentifier: string | undefined) => {
+  const handleLeaveOpen = (directoryIdentifier: string | undefined) => {
     if (directoryIdentifier) {
       handleDirectoryOptionsClose();
 
@@ -261,16 +262,26 @@ function Directories() {
       if (!dir) return;
 
       setOptDirectory(dir);
-      setRemoveOpen(true);
+      setLeaveOpen(true);
     }
   };
 
-  const handleRemoveClose = () => {
+  const handleLeaveClose = () => {
     setOptDirectory(null);
-    setRemoveOpen(false);
+    setLeaveOpen(false);
   };
 
-  const handleRemove = async () => {};
+  const handleLeave = async () => {
+    if (selectedDirectory?.signature.identifier) {
+      const request: LeaveDirectory = {
+        leaveDirectory: {
+          directory_identifier: selectedDirectory.signature.identifier
+        }
+      };
+
+      await invokeNetworkCommand(request);
+    }
+  };
 
   const duplicatedNames = new Map<string, number>();
   let directories = null;
@@ -335,7 +346,7 @@ function Directories() {
         >
           <MenuItem
             onClick={() =>
-              handleRemoveOpen(optDirectory?.signature?.identifier)
+              handleLeaveOpen(optDirectory?.signature?.identifier)
             }
           >
             Remove
@@ -406,13 +417,17 @@ function Directories() {
         </div>
       </Dialog>
 
-      <Dialog open={removeOpen} onClose={handleRemoveClose}>
+      <Dialog open={leaveOpen} onClose={handleLeaveClose}>
         <div>
-          <DialogTitle>Directory Removal</DialogTitle>
-          <DialogContent></DialogContent>
+          <DialogTitle>Leave Directory</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              Are you sure you want to leave directory {selectedDirectory?.signature.name}?
+            </DialogContentText>
+          </DialogContent>
           <DialogActions>
-            <Button onClick={handleRemoveClose}>Cancel</Button>
-            <Button onClick={handleRemove}>Remove</Button>
+            <Button onClick={handleLeaveClose}>Cancel</Button>
+            <Button onClick={handleLeave}>Leave</Button>
           </DialogActions>
         </div>
       </Dialog>

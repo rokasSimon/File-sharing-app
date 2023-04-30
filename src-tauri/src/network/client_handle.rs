@@ -55,6 +55,9 @@ pub enum MessageFromServer {
     },
 
     SharedDirectory(ShareDirectory),
+    LeftDirectory {
+        directory_identifier: Uuid,
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -354,6 +357,27 @@ async fn handle_tcp_message<'a>(
                 .channel
                 .send(MessageToServer::SharedDirectory(directory))
                 .await?;
+
+            Ok(())
+        }
+
+        TcpMessage::LeftDirectory { directory_identifier, date_modified} => {
+            let peer = match data.client_peer_id {
+                None => {
+                    error!("Peer ID not yet set");
+                    return Ok(());
+                },
+                Some(p) => p
+            };
+
+            let mut directories = data.client_data.server.config.cached_data.lock().await;
+            let directory = directories.get_mut(&directory_identifier);
+            let directory = match directory {
+                None => return Ok(()),
+                Some(dir) => dir,
+            };
+
+            directory.remove_peer(peer, date_modified);
 
             Ok(())
         }
@@ -681,6 +705,14 @@ async fn handle_server_messages(
 
             data.tcp_write
                 .send(TcpMessage::SharedDirectory(directory))
+                .await?;
+
+            Ok(())
+        }
+
+        MessageFromServer::LeftDirectory { directory_identifier } => {
+            data.tcp_write
+                .send(TcpMessage::LeftDirectory { directory_identifier, date_modified: Utc::now() })
                 .await?;
 
             Ok(())
