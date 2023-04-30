@@ -60,7 +60,6 @@ function DownloadsManager({ children }: any) {
     const startListenDownloadUpdate = async () => {
       const _ = await listen<DownloadUpdate>("DownloadUpdate", (event) => {
         const input = event.payload;
-        console.log(`Download updated ${JSON.stringify(input)}`);
 
         const alreadyDownloading = downloadsRef.current.find((download) => {
           return download.downloadId === input.downloadId;
