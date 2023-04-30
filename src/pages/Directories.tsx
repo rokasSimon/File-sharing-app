@@ -56,10 +56,12 @@ function Directories() {
   const [shareCreationOpen, setShareCreationOpen] = React.useState(false);
 
   React.useEffect(() => {
+    console.log("Updating directories from context" + JSON.stringify(shareDirectories));
     if (selectedDirectory) {
       const directory = shareDirectories.find((dir) => dir.signature.identifier === selectedDirectory.signature.identifier);
 
       if (directory) {
+        console.log(`Setting ${JSON.stringify(selectedDirectory)} to ${JSON.stringify(directory)}`);
         setSelectedDirectory(directory);
       } else {
         setSelectedDirectory(null);

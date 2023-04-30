@@ -753,6 +753,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                         _ => (),
                     }
 
+                    file.content_location = ContentLocation::NetworkOnly;
                     dir.delete_files(
                         &server_data.server_handle.peer_id,
                         Utc::now(),

@@ -135,6 +135,8 @@ function ShareDirectoryProvider({ children }: any) {
           return 0;
         });
 
+        console.log(`Updated directories to ${JSON.stringify(sortedDirectories)}`);
+
         setDirectories(sortedDirectories);
       });
     };

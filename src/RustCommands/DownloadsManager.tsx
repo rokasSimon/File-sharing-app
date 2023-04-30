@@ -137,8 +137,8 @@ function DownloadsManager({ children }: any) {
 
     return (
       <Paper
+        key={download.downloadId}
         elevation={2}
-        variant="outlined"
         style={{
           padding: "0.5em 1em",
         }}
