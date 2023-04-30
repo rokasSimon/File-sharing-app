@@ -362,14 +362,14 @@ async fn handle_tcp_message<'a>(
                                     match file_handle {
                                         Err(_) => Err(DownloadError::FileMissing),
                                         Ok(file_handle) => {
-                                            let mut uploads = data.uploads.lock().await;
+                                            {
+                                                let mut uploads = data.uploads.lock().await;
 
-                                            uploads.insert(
-                                                download_id,
-                                                UploadHandle {
-                                                    canceled: false,
-                                                },
-                                            );
+                                                uploads.insert(
+                                                    download_id,
+                                                    UploadHandle { canceled: false },
+                                                );
+                                            }
 
                                             upload_file(
                                                 file_handle,
@@ -440,7 +440,8 @@ async fn handle_tcp_message<'a>(
                                 .expect("app should be running on a 64 bit system");
                             download.bytes_done += bytes_received;
 
-                            let percent = (download.bytes_done as f64 / download.bytes_total as f64) * 100.0;
+                            let percent =
+                                (download.bytes_done as f64 / download.bytes_total as f64) * 100.0;
                             let percent = percent.round() as u64;
 
                             if percent > 100 {
@@ -579,7 +580,11 @@ async fn handle_tcp_message<'a>(
                 if let Some(file) = directory.shared_files.get_mut(&file_identifier) {
                     file.owned_peers.push(peer_id);
 
-                    data.client_data.server.channel.send(MessageToServer::UpdatedDirectory(directory_identifier)).await?;
+                    data.client_data
+                        .server
+                        .channel
+                        .send(MessageToServer::UpdatedDirectory(directory_identifier))
+                        .await?;
                 }
             }
 
@@ -663,7 +668,7 @@ async fn handle_server_messages(
         } => {
             let this_client = match data.client_peer_id {
                 None => return Err(anyhow!("Client has not assigned peer ID yet")),
-                Some(id) => id, 
+                Some(id) => id,
             };
 
             let directories = data.client_data.server.config.cached_data.lock().await;
@@ -776,7 +781,10 @@ async fn handle_server_messages(
             let mut downloads = data.downloads.lock().await;
             downloads.remove(&download_id);
 
-            let _ = data.tcp_write.send(TcpMessage::CancelDownload { download_id }).await;
+            let _ = data
+                .tcp_write
+                .send(TcpMessage::CancelDownload { download_id })
+                .await;
 
             Ok(())
         }
@@ -788,7 +796,9 @@ async fn disconnect_self(client_data_handle: &mut ClientDataHandle<'_>) {
         .client_data
         .server
         .channel
-        .send(MessageToServer::KillClient(client_data_handle.client_data.addr))
+        .send(MessageToServer::KillClient(
+            client_data_handle.client_data.addr,
+        ))
         .await;
 
     {
@@ -805,7 +815,10 @@ async fn disconnect_self(client_data_handle: &mut ClientDataHandle<'_>) {
         }
     }
 
-    warn!("Disconneting client {}.", client_data_handle.client_data.addr);
+    warn!(
+        "Disconneting client {}.",
+        client_data_handle.client_data.addr
+    );
 }
 
 async fn upload_file(
@@ -859,6 +872,8 @@ async fn upload_file(
                     return Err(DownloadError::ReadError);
                 }
             }
+        } else {
+            return Err(DownloadError::Canceled);
         }
     }
 }
