@@ -68,7 +68,7 @@ pub struct Download {
     pub download_id: Uuid,
     pub file_identifier: Uuid,
     pub directory_identifier: Uuid,
-    pub progress: u8,
+    pub progress: u64,
     pub file_name: String,
     pub file_path: PathBuf,
 }
@@ -76,7 +76,7 @@ pub struct Download {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 struct DownloadUpdate {
-    pub progress: u8,
+    pub progress: u64,
     pub download_id: Uuid,
 }
 
@@ -121,7 +121,7 @@ pub enum MessageToServer {
     },
     DownloadUpdate {
         download_id: Uuid,
-        new_progress: u8,
+        new_progress: u64,
     },
     CanceledDownload {
         download_id: Uuid,

@@ -421,27 +421,25 @@ async fn handle_tcp_message<'a>(
                                 .expect("app should be running on a 64 bit system");
                             download.bytes_done += bytes_received;
 
-                            let percent = u8::try_from(download.bytes_done / download.bytes_total);
+                            let percent = (download.bytes_done as f64 / download.bytes_total as f64)
+                                .round() as u64;
 
-                            match percent {
-                                Err(_) => {
-                                    download.canceled = true;
-                                    Err(DownloadError::FileTooLarge)
-                                }
-                                Ok(percent) => {
-                                    let percent = u8::clamp(percent, 0, 100);
-                                    let _ = data
-                                        .client_data
-                                        .server
-                                        .channel
-                                        .send(MessageToServer::DownloadUpdate {
-                                            download_id,
-                                            new_progress: percent,
-                                        })
-                                        .await?;
+                            if percent > 100 {
+                                download.canceled = true;
 
-                                    Ok(())
-                                }
+                                Err(DownloadError::FileTooLarge)
+                            } else {
+                                let _ = data
+                                    .client_data
+                                    .server
+                                    .channel
+                                    .send(MessageToServer::DownloadUpdate {
+                                        download_id,
+                                        new_progress: percent,
+                                    })
+                                    .await?;
+
+                                Ok(())
                             }
                         }
                     }
@@ -503,7 +501,7 @@ async fn handle_tcp_message<'a>(
                 None => {
                     download.canceled = true;
                     Err(DownloadError::DirectoryMissing)
-                },
+                }
                 Some(directory) => {
                     let file = directory.shared_files.get_mut(&download.file_id);
 
@@ -511,7 +509,7 @@ async fn handle_tcp_message<'a>(
                         None => {
                             download.canceled = true;
                             Err(DownloadError::FileMissing)
-                        },
+                        }
                         Some(file) => {
                             file.owned_peers.push(myself.clone());
                             file.content_location =
@@ -549,7 +547,11 @@ async fn handle_tcp_message<'a>(
             Ok(())
         }
 
-        TcpMessage::DownloadedFile { peer_id, directory_identifier, file_identifier } => {
+        TcpMessage::DownloadedFile {
+            peer_id,
+            directory_identifier,
+            file_identifier,
+        } => {
             let mut directories = data.client_data.server.config.cached_data.lock().await;
 
             if let Some(directory) = directories.get_mut(&directory_identifier) {
@@ -720,8 +722,19 @@ async fn handle_server_messages(
             Ok(())
         }
 
-        MessageFromServer::UpdateOwners { peer_id, directory_identifier, file_identifier } => {
-            let _ = data.tcp_write.send(TcpMessage::DownloadedFile { peer_id, directory_identifier, file_identifier }).await?;
+        MessageFromServer::UpdateOwners {
+            peer_id,
+            directory_identifier,
+            file_identifier,
+        } => {
+            let _ = data
+                .tcp_write
+                .send(TcpMessage::DownloadedFile {
+                    peer_id,
+                    directory_identifier,
+                    file_identifier,
+                })
+                .await?;
 
             Ok(())
         }
