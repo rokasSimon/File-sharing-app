@@ -832,7 +832,6 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
 
         WindowRequest::CancelDownload { download_identifier, peer } => {
             let download_id = Uuid::parse_str(&download_identifier)?;
-            let clients = server_data.clients.lock().await;
             let peers = vec![peer];
             server_data.broadcast(&peers, MessageFromServer::CancelDownload { download_id }).await;
             // for (_, c) in clients.iter() {
