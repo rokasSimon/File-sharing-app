@@ -416,7 +416,7 @@ async fn handle_tcp_message<'a>(
 
             let result = match download {
                 None => {
-                    error!("Received file part for unknown download");
+                    //error!("Received file part for unknown download");
 
                     return Ok(());
                 }

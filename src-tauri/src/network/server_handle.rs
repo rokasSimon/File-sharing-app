@@ -796,7 +796,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                             let download_directory = app_config.download_directory.clone();
                             let file_path = download_directory.join(&file.name);
                             let file_path = if file_path.exists() {
-                                download_directory.join(download_id.to_string())
+                                file_path.join(download_id.to_string())
                             } else {
                                 file_path
                             };
