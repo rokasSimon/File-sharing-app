@@ -8,6 +8,7 @@ import { createHashRouter, RouterProvider } from "react-router-dom";
 
 import '@fontsource/roboto/500.css';
 import Directories from './pages/Directories';
+import Settings from './pages/Settings';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -20,7 +21,7 @@ const router = createHashRouter([
     children: [
       {
         path: '/settings',
-        element: <div>Settings</div>
+        element: <Settings />
       },
       {
         path: '/directories',

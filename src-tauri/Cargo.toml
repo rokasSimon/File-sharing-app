@@ -17,7 +17,7 @@ tauri-build = { version = "1.2.1", features = [] }
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.2.4", features = ["dialog-message", "dialog-open", "dialog-save", "window-close", "window-hide", "window-maximize", "window-minimize", "window-set-focus", "window-set-resizable", "window-show", "window-start-dragging", "window-unmaximize", "window-unminimize"] }
+tauri = { version = "1.2.4", features = ["dialog-message", "dialog-open", "dialog-save", "system-tray", "window-close", "window-hide", "window-maximize", "window-minimize", "window-set-focus", "window-set-resizable", "window-show", "window-start-dragging", "window-unmaximize", "window-unminimize"] }
 window-shadows = "0.2.1"
 log = "0.4.17"
 pretty_env_logger = "0.4.0"
@@ -45,3 +45,7 @@ default = [ "custom-protocol" ]
 # this feature is used for production builds where `devPath` points to the filesystem
 # DO NOT remove this
 custom-protocol = [ "tauri/custom-protocol" ]
+
+
+[package.metadata.bundle]
+icon = [ "icons/icon.png" ]

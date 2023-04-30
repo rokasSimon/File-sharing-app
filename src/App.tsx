@@ -22,7 +22,12 @@ type BackendError = {
   error: string;
 };
 
-const ThemeContext = React.createContext({ toggleTheme: () => {} });
+type ThemeContextValue = {
+  toggleTheme: () => void,
+  mode: "light" | "dark"
+};
+
+const ThemeContext = React.createContext<ThemeContextValue>({ toggleTheme: () => {}, mode: "dark" });
 const ErrorContext = React.createContext<BackendError | null>(null);
 
 const getDesignTokens = (mode: PaletteMode) => ({
@@ -64,8 +69,13 @@ function App() {
     loaded.current = true;
   }, []);
 
+  const themeVal: ThemeContextValue = {
+    toggleTheme: toggleTheme.toggleTheme,
+    mode: mode
+  };
+
   return (
-    <ThemeContext.Provider value={toggleTheme}>
+    <ThemeContext.Provider value={themeVal}>
       <ThemeProvider theme={theme}>
         <ErrorContext.Provider value={lastError}>
           <ConnectedDevicesProvider>

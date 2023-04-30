@@ -18,7 +18,7 @@ use std::{
     sync::Arc,
 };
 
-use tauri::{async_runtime::Mutex, Manager};
+use tauri::{async_runtime::Mutex, Manager, SystemTrayMenu, CustomMenuItem, SystemTray};
 use tokio::sync::{mpsc, oneshot};
 use window_shadows::set_shadow;
 
@@ -32,7 +32,9 @@ use network::{
 };
 
 use crate::{
-    config::{load_stored_data, write_stored_data}, network::server_handle::WindowRequest, window::open_file
+    config::{load_stored_data, save_config_loop, write_stored_data},
+    network::server_handle::WindowRequest,
+    window::{open_file, save_settings, get_settings},
 };
 
 const THREAD_CHANNEL_SIZE: usize = 64;
@@ -40,14 +42,14 @@ const THREAD_CHANNEL_SIZE: usize = 64;
 fn main() {
     pretty_env_logger::init();
 
-    let config = load_stored_data();
-    let id = config
+    let conf = load_stored_data();
+    let id = conf
         .app_config
         .blocking_lock()
         .peer_id
         .clone()
         .expect("PeerID should be set on startup");
-    let stored_data = Arc::new(config);
+    let stored_data = Arc::new(conf);
 
     let (network_sender, network_receiver) = mpsc::channel::<WindowRequest>(THREAD_CHANNEL_SIZE);
     let (mdns_sender, mdns_receiver) = mpsc::channel::<MessageToMdns>(THREAD_CHANNEL_SIZE);
@@ -63,27 +65,34 @@ fn main() {
         peer_id: id.clone(),
     };
 
+    let exit = CustomMenuItem::new("exit".to_string(), "Exit");
+    let system_tray_menu = SystemTrayMenu::new().add_item(exit);
+    let system_tray = SystemTray::new().with_menu(system_tray_menu);
+
+    let exit_config = stored_data.clone();
+    let window_config = stored_data.clone();
+    let loop_config = stored_data.clone();
+    let settings_config = stored_data.clone();
     tauri::Builder::default()
+        .system_tray(system_tray)
         .manage(NetworkThreadSender {
             inner: Mutex::new(network_sender),
         })
+        .manage(settings_config)
         .on_window_event(move |event| match event.event() {
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                let config = stored_data.clone();
-                let config_lock = config.app_config.blocking_lock();
+                let config_lock = window_config.app_config.blocking_lock();
 
                 if config_lock.hide_on_close {
                     api.prevent_close();
                 }
             }
             tauri::WindowEvent::Destroyed => {
-                let config = stored_data.clone();
-
-                write_stored_data(&config);
+                write_stored_data(&exit_config);
             }
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![network_command, open_file])
+        .invoke_handler(tauri::generate_handler![network_command, open_file, save_settings, get_settings])
         .setup(move |app| {
             let window = app.get_window("main").expect("To find main window");
 
@@ -113,10 +122,10 @@ fn main() {
                 server_handle.clone(),
             ));
 
+            tauri::async_runtime::spawn(save_config_loop(loop_config));
+
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-
-    info!("Exiting app...");
 }

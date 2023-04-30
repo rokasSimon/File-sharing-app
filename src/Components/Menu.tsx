@@ -6,7 +6,6 @@ import { useNavigate } from "react-router-dom";
 import { Button, Menu as MaterialMenu, MenuItem } from "@mui/material";
 
 function Menu() {
-  const themeContext = React.useContext(ThemeContext);
   const navigate = useNavigate();
 
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
@@ -44,14 +43,6 @@ function Menu() {
           }}
         >
           Settings
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            handleClose();
-            themeContext.toggleTheme();
-          }}
-        >
-          Toggle Theme
         </MenuItem>
       </MaterialMenu>
     </div>
