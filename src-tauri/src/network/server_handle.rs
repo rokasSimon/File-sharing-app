@@ -775,7 +775,10 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
 
             let files = get_file(&*directories, dir_id, file_id);
             let result = match files {
-                None => Err(DownloadError::DirectoryMissing),
+                None => {
+                    error!("Directory missing {}", dir_id);
+                    Err(DownloadError::DirectoryMissing)
+                },
                 Some((_, file)) => {
                     let mut clients = server_data.clients.lock().await;
                     let client = clients.iter_mut().find(|(_, c)| {
@@ -787,7 +790,10 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                     });
 
                     match client {
-                        None => Err(DownloadError::NoClientsConnected),
+                        None => {
+                            error!("Clients to download from not found");
+                            Err(DownloadError::NoClientsConnected)
+                        },
                         Some((_, c)) => {
                             let download_id = Uuid::new_v4();
                             let app_config =
@@ -818,6 +824,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             };
 
             if let Err(e) = result {
+                error!("{}", e);
                 let _ = server_data.window_manager.emit_to(
                     MAIN_WINDOW_LABEL,
                     WindowAction::DOWNLOAD_CANCELED,

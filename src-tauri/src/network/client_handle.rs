@@ -556,8 +556,9 @@ async fn handle_tcp_message<'a>(
 
             match download {
                 None => Ok(()),
-                Some(mut download) => {
-                    download.canceled = true;
+                Some(download) => {
+                    let _ = fs::remove_file(download.output_path).await;
+
                     let _ = data
                         .client_data
                         .server
@@ -810,8 +811,7 @@ async fn handle_server_messages(
             };
 
             if let Err(e) = result {
-                let mut downloads = data.downloads.lock().await;
-                downloads.remove(&download_id);
+                error!("{}", e);
 
                 let _ = data
                     .client_data
