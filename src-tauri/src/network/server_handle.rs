@@ -833,14 +833,16 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
         WindowRequest::CancelDownload { download_identifier, peer } => {
             let download_id = Uuid::parse_str(&download_identifier)?;
             let clients = server_data.clients.lock().await;
-            for (_, c) in clients.iter() {
-                if let Some(peer_id) = &c.id {
-                    if &peer == peer_id {
-                        let msg = MessageFromServer::CancelDownload { download_id };
-                        c.sender.send(msg).await?;
-                    }
-                }
-            }
+            let peers = vec![peer];
+            server_data.broadcast(&peers, MessageFromServer::CancelDownload { download_id }).await;
+            // for (_, c) in clients.iter() {
+            //     if let Some(peer_id) = &c.id {
+            //         if &peer == peer_id {
+            //             let msg = ;
+            //             c.sender.send(msg).await?;
+            //         }
+            //     }
+            // }
 
             let _ = server_data.window_manager.emit_to(
                 MAIN_WINDOW_LABEL,
@@ -961,33 +963,3 @@ fn get_file(
         }
     }
 }
-
-// fn update_downloaded_file(directories: &mut HashMap<Uuid, ShareDirectory>, myself: &PeerId, download: &Download) -> Result<Vec<PeerId>, BackendError> {
-//     let directory = directories.get_mut(&download.directory_identifier);
-
-//     match directory {
-//         None => Err(BackendError {
-//             error: format!(
-//                 "Directory {} does not exist.",
-//                 download.directory_identifier
-//             ),
-//             title: "Download Failure".to_owned(),
-//         }),
-//         Some(directory) => {
-//             let file = directory.shared_files.get_mut(&download.file_identifier);
-
-//             match file {
-//                 None => Err(BackendError {
-//                     error: format!("File {} does not exist.", download.file_name),
-//                     title: "Download Failure".to_owned(),
-//                 }),
-//                 Some(file) => {
-//                     file.owned_peers.push(myself.clone());
-//                     file.content_location = ContentLocation::LocalPath(download.file_path.clone());
-
-//                     Ok(file.owned_peers.clone())
-//                 }
-//             }
-//         }
-//     }
-// }

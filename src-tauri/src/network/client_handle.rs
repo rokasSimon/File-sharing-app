@@ -204,6 +204,8 @@ async fn handle_uploads<'a>(
             Err(error) => {
                 uploads_to_remove.push(*download_id);
 
+                info!("Download {} errored out because {}", download_id, error);
+
                 let _ = client_data.tcp_write.send(TcpMessage::DownloadError { error, download_id: *download_id }).await;
             },
             Ok(is_finished) => {
@@ -215,6 +217,7 @@ async fn handle_uploads<'a>(
     }
 
     for download_id in uploads_to_remove {
+        info!("Removing download {}", download_id);
         uploads.remove(&download_id);
     }
 
@@ -464,62 +467,6 @@ async fn handle_tcp_message<'a>(
             }
 
             Ok(())
-            // let mut directories = data.client_data.server.config.cached_data.lock().await;
-            // let dir = directories.get_mut(&dir_id);
-
-            // let result = match dir {
-            //     None => Err(DownloadError::DirectoryMissing),
-            //     Some(dir) => {
-            //         let file = dir.shared_files.get(&file_id);
-
-            //         match file {
-            //             None => Err(DownloadError::FileMissing),
-            //             Some(file) => {
-            //                 match &file.content_location {
-            //                     ContentLocation::NetworkOnly => Err(DownloadError::FileNotOwned), // return error saying I don't have this file
-            //                     ContentLocation::LocalPath(path) => {
-            //                         let file_handle = File::open(path).await;
-
-            //                         match file_handle {
-            //                             Err(_) => Err(DownloadError::FileMissing),
-            //                             Ok(file_handle) => {
-            //                                 {
-            //                                     let mut uploads = data.uploads.lock().await;
-
-            //                                     uploads.insert(
-            //                                         download_id,
-            //                                         UploadHandle { canceled: false },
-            //                                     );
-            //                                 }
-
-            //                                 upload_file(
-            //                                     file_handle,
-            //                                     &data.uploads,
-            //                                     &download_id,
-            //                                     data.tcp_write,
-            //                                 )
-            //                                 .await
-            //                             }
-            //                         }
-            //                     }
-            //                 }
-            //             }
-            //         }
-            //     }
-            // };
-
-            // if let Err(e) = result {
-            //     let _ = data
-            //         .tcp_write
-            //         .send(TcpMessage::DownloadError {
-            //             error: e,
-            //             download_id,
-            //         })
-            //         .await?;
-            // }
-
-            // let mut uploads = data.uploads.lock().await;
-            // uploads.remove(&download_id);
         }
 
         TcpMessage::CancelDownload { download_id } => {
@@ -981,60 +928,3 @@ async fn start_upload(
         buffer: [0; FILE_CHUNK_SIZE],
     })
 }
-
-// async fn upload_file(
-//     file_handle: File,
-//     uploads: &Mutex<HashMap<Uuid, UploadHandle>>,
-//     download_id: &Uuid,
-//     tcp_write: &mut FramedWrite<WriteHalf<'_>, MessageCodec>,
-// ) -> Result<(), DownloadError> {
-//     let mut buffer = [0; FILE_CHUNK_SIZE];
-//     let mut reader = BufReader::new(file_handle);
-
-//     loop {
-//         let upload_lock = uploads.lock().await;
-//         let upload_status = upload_lock.get(&download_id);
-
-//         if let Some(upload_status) = upload_status {
-//             if upload_status.canceled {
-//                 return Err(DownloadError::Canceled);
-//             }
-
-//             let res = reader.read(&mut buffer).await;
-
-//             match res {
-//                 Ok(n) => {
-//                     let msg = if n == 0 {
-//                         TcpMessage::ReceiveFileEnd {
-//                             download_id: *download_id,
-//                         }
-//                     } else {
-//                         TcpMessage::ReceiveFilePart {
-//                             download_id: *download_id,
-//                             data: buffer[..n].to_vec(),
-//                         }
-//                     };
-
-//                     let send_result = tcp_write.send(msg).await;
-
-//                     match send_result {
-//                         Ok(_) => {
-//                             if n == 0 {
-//                                 return Ok(());
-//                             } else {
-//                                 continue;
-//                             }
-//                         }
-//                         Err(_) => return Err(DownloadError::Disconnected),
-//                     }
-//                 }
-//                 Err(e) => {
-//                     error!("{}", e);
-//                     return Err(DownloadError::ReadError);
-//                 }
-//             }
-//         } else {
-//             return Err(DownloadError::Canceled);
-//         }
-//     }
-// }
