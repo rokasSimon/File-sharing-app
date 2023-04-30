@@ -42,6 +42,10 @@ pub enum TcpMessage {
         dir_id: Uuid,
     },
 
+    CancelDownload {
+        download_id: Uuid
+    },
+
     ReceiveFilePart {
         download_id: Uuid,
         data: Vec<u8>

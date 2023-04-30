@@ -44,6 +44,7 @@ interface DeleteFile extends BackendCommand {
 interface CancelDownload extends BackendCommand {
     cancelDownload: {
         download_identifier: string,
+        peer: PeerId,
     }
 }
 

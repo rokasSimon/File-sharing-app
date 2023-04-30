@@ -42,6 +42,9 @@ pub enum MessageFromServer {
         directory_identifier: Uuid,
         destination: PathBuf,
     },
+    CancelDownload {
+        download_id: Uuid,
+    },
     UpdateOwners {
         peer_id: PeerId,
         directory_identifier: Uuid,
@@ -99,7 +102,7 @@ impl Drop for DownloadHandle {
 }
 
 struct UploadHandle {
-    is_cancelled: bool,
+    canceled: bool,
 }
 
 pub struct ClientData {
@@ -145,7 +148,7 @@ pub async fn client_loop(
                 if let Err(e) = result {
                     error!("TCP err: {}", e);
 
-                    disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
+                    disconnect_self(&mut handle).await;
                     return;
                 }
             }
@@ -158,12 +161,12 @@ pub async fn client_loop(
                         if let Err(e) = result {
                             error!("Server err: {}", e);
 
-                            disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
+                            disconnect_self(&mut handle).await;
                             return;
                         }
                     },
                     None => {
-                        disconnect_self(handle.client_data.server.clone(), handle.client_data.addr).await;
+                        disconnect_self(&mut handle).await;
                         return;
                     }
                 }
@@ -364,7 +367,7 @@ async fn handle_tcp_message<'a>(
                                             uploads.insert(
                                                 download_id,
                                                 UploadHandle {
-                                                    is_cancelled: false,
+                                                    canceled: false,
                                                 },
                                             );
 
@@ -396,6 +399,17 @@ async fn handle_tcp_message<'a>(
 
             let mut uploads = data.uploads.lock().await;
             uploads.remove(&download_id);
+
+            Ok(())
+        }
+
+        TcpMessage::CancelDownload { download_id } => {
+            let mut uploads = data.uploads.lock().await;
+            let upload = uploads.get_mut(&download_id);
+
+            if let Some(upload) = upload {
+                upload.canceled = true;
+            }
 
             Ok(())
         }
@@ -647,6 +661,11 @@ async fn handle_server_messages(
             directory_identifier,
             destination,
         } => {
+            let this_client = match data.client_peer_id {
+                None => return Err(anyhow!("Client has not assigned peer ID yet")),
+                Some(id) => id, 
+            };
+
             let directories = data.client_data.server.config.cached_data.lock().await;
             let directory = directories.get(&directory_identifier);
 
@@ -698,6 +717,7 @@ async fn handle_server_messages(
                                             .channel
                                             .send(MessageToServer::StartedDownload {
                                                 download_info: Download {
+                                                    peer: this_client.clone(),
                                                     download_id,
                                                     file_identifier,
                                                     directory_identifier,
@@ -751,16 +771,41 @@ async fn handle_server_messages(
 
             Ok(())
         }
+
+        MessageFromServer::CancelDownload { download_id } => {
+            let mut downloads = data.downloads.lock().await;
+            downloads.remove(&download_id);
+
+            let _ = data.tcp_write.send(TcpMessage::CancelDownload { download_id }).await;
+
+            Ok(())
+        }
     }
 }
 
-async fn disconnect_self(server_handle: ServerHandle, addr: IpAddr) {
-    let _ = server_handle
+async fn disconnect_self(client_data_handle: &mut ClientDataHandle<'_>) {
+    let _ = client_data_handle
+        .client_data
+        .server
         .channel
-        .send(MessageToServer::KillClient(addr))
+        .send(MessageToServer::KillClient(client_data_handle.client_data.addr))
         .await;
 
-    warn!("Disconneting client {}.", addr);
+    {
+        let mut downloads = client_data_handle.downloads.lock().await;
+        for (_, download) in downloads.iter_mut() {
+            download.canceled = true;
+        }
+    }
+
+    {
+        let mut uploads = client_data_handle.uploads.lock().await;
+        for (_, upload) in uploads.iter_mut() {
+            upload.canceled = true;
+        }
+    }
+
+    warn!("Disconneting client {}.", client_data_handle.client_data.addr);
 }
 
 async fn upload_file(
@@ -777,7 +822,7 @@ async fn upload_file(
         let upload_status = upload_lock.get(&download_id);
 
         if let Some(upload_status) = upload_status {
-            if upload_status.is_cancelled {
+            if upload_status.canceled {
                 return Err(DownloadError::Canceled);
             }
 

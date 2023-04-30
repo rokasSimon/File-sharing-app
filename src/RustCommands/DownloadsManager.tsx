@@ -10,8 +10,10 @@ import {
   Typography,
 } from "@mui/material";
 import { CancelDownload, invokeNetworkCommand } from "./networkCommands";
+import { PeerId } from "./ShareDirectoryContext";
 
 type Download = {
+  peer: PeerId,
   downloadId: string;
   fileIdentifier: string;
   directoryIdentifier: string;
@@ -120,6 +122,7 @@ function DownloadsManager({ children }: any) {
     if (download) {
       const request: CancelDownload = {
         cancelDownload: {
+          peer: download.peer,
           download_identifier: downloadId
         }
       };

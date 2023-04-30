@@ -65,6 +65,7 @@ pub struct ClientHandle {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Download {
+    pub peer: PeerId,
     pub download_id: Uuid,
     pub file_identifier: Uuid,
     pub directory_identifier: Uuid,
@@ -176,6 +177,10 @@ pub enum WindowRequest {
     DeleteFile {
         directory_identifier: String,
         file_identifier: String,
+    },
+    CancelDownload {
+        peer: PeerId,
+        download_identifier: String,
     },
 }
 
@@ -821,6 +826,30 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                     },
                 )?;
             }
+
+            Ok(())
+        }
+
+        WindowRequest::CancelDownload { download_identifier, peer } => {
+            let download_id = Uuid::parse_str(&download_identifier)?;
+            let clients = server_data.clients.lock().await;
+            for (_, c) in clients.iter() {
+                if let Some(peer_id) = &c.id {
+                    if &peer == peer_id {
+                        let msg = MessageFromServer::CancelDownload { download_id };
+                        c.sender.send(msg).await?;
+                    }
+                }
+            }
+
+            let _ = server_data.window_manager.emit_to(
+                MAIN_WINDOW_LABEL,
+                WindowAction::DOWNLOAD_CANCELED,
+                DownloadCanceled {
+                    download_id,
+                    reason: DownloadError::Canceled.to_string(),
+                },
+            )?;
 
             Ok(())
         }
