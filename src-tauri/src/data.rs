@@ -49,6 +49,23 @@ impl ShareDirectory {
             }
         }
     }
+
+    pub fn add_owner(
+        &mut self,
+        new_owner: PeerId,
+        date_modified: DateTime<Utc>,
+        file_ids: Vec<Uuid>,
+    ) {
+        self.signature.last_modified = date_modified;
+
+        for file_id in file_ids {
+            let some_file = self.shared_files.get_mut(&file_id);
+
+            if let Some(file) = some_file {
+                file.owned_peers.push(new_owner.clone());
+            }
+        }
+    }
 }
 
 impl Clone for ShareDirectory {

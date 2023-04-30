@@ -39,7 +39,7 @@ use crate::{
 };
 
 use super::{
-    client_handle::{client_loop, ClientData, MessageFromServer, DownloadError},
+    client_handle::{client_loop, ClientData, DownloadError, MessageFromServer},
     mdns::MessageToMdns,
 };
 
@@ -113,7 +113,7 @@ pub enum MessageToServer {
     UpdatedDirectory(Uuid),
 
     StartedDownload {
-        download_info: Download
+        download_info: Download,
     },
     FinishedDownload {
         download_id: Uuid,
@@ -126,7 +126,7 @@ pub enum MessageToServer {
     },
     CanceledDownload {
         download_id: Uuid,
-        cancel_reason: String
+        cancel_reason: String,
     },
 
     SharedDirectory(ShareDirectory),
@@ -349,7 +349,8 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
         MessageToServer::SetPeerId(addr, id) => {
             let mut clients = server_data.clients.lock().await;
-            let mut peer_ids: Vec<PeerId> = clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
+            let mut peer_ids: Vec<PeerId> =
+                clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
             let client = clients.get_mut(&addr);
 
             match client {
@@ -357,7 +358,11 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                     client.id = Some(id.clone());
                     peer_ids.push(id);
 
-                    let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::GET_PEERS, peer_ids)?;
+                    let _ = server_data.window_manager.emit_to(
+                        MAIN_WINDOW_LABEL,
+                        WindowAction::GET_PEERS,
+                        peer_ids,
+                    )?;
                     let _ = client.sender.send(MessageFromServer::Synchronize).await?;
 
                     Ok(())
@@ -368,7 +373,8 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
 
         MessageToServer::KillClient(client_addr) => {
             let mut clients = server_data.clients.lock().await;
-            let mut peer_ids: Vec<PeerId> = clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
+            let mut peer_ids: Vec<PeerId> =
+                clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
             let client = clients.remove(&client_addr);
 
             match client {
@@ -383,7 +389,11 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                         }
                     }
 
-                    let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::GET_PEERS, peer_ids)?;
+                    let _ = server_data.window_manager.emit_to(
+                        MAIN_WINDOW_LABEL,
+                        WindowAction::GET_PEERS,
+                        peer_ids,
+                    )?;
 
                     Ok(())
                 }
@@ -463,13 +473,6 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                                     for file in files_to_add {
                                         matched_dir.shared_files.insert(file.identifier, file);
                                     }
-                                } else {
-                                    info!(
-                                        "Received older directory signature: {} | {} < {}",
-                                        matched_dir.signature.identifier,
-                                        dir.signature.last_modified,
-                                        matched_dir.signature.last_modified
-                                    );
                                 }
                             }
                             None => {
@@ -508,10 +511,7 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             Ok(())
         }
 
-        MessageToServer::StartedDownload {
-            download_info
-        } => {
-            
+        MessageToServer::StartedDownload { download_info } => {
             let _ = server_data.window_manager.emit_to(
                 MAIN_WINDOW_LABEL,
                 WindowAction::DOWNLOAD_STARTED,
@@ -521,10 +521,14 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             Ok(())
         }
 
-        MessageToServer::FinishedDownload { download_id, directory_identifier, file_identifier } => {
+        MessageToServer::FinishedDownload {
+            download_id,
+            directory_identifier,
+            file_identifier,
+        } => {
             let myself = server_data.server_handle.peer_id.clone();
-            let directories = server_data.server_handle.config.cached_data.lock().await;
-            let directory = directories.get(&directory_identifier);
+            let mut directories = server_data.server_handle.config.cached_data.lock().await;
+            let directory = directories.get_mut(&directory_identifier);
 
             match directory {
                 None => {
@@ -533,26 +537,40 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
                         WindowAction::DOWNLOAD_CANCELED,
                         DownloadCanceled {
                             download_id,
-                            reason: "Could not update other clients.".to_owned()
+                            reason: "Could not update other clients.".to_owned(),
                         },
                     )?;
-        
-                    Ok(())
-                },
-                Some(directory) => {
-                    server_data.broadcast(&directory.signature.shared_peers, MessageFromServer::UpdateOwners { peer_id: myself, directory_identifier, file_identifier }).await;
 
-                    let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UPDATE_DIRECTORY, directory.clone())?;
+                    Ok(())
+                }
+                Some(directory) => {
+                    server_data
+                        .broadcast(
+                            &directory.signature.shared_peers,
+                            MessageFromServer::UpdateOwners {
+                                peer_id: myself,
+                                directory_identifier,
+                                file_identifier,
+                                date_modified: directory.signature.last_modified,
+                            },
+                        )
+                        .await;
+
+                    let _ = server_data.window_manager.emit_to(
+                        MAIN_WINDOW_LABEL,
+                        WindowAction::UPDATE_DIRECTORY,
+                        directory.clone(),
+                    )?;
 
                     let _ = server_data.window_manager.emit_to(
                         MAIN_WINDOW_LABEL,
                         WindowAction::DOWNLOAD_UPDATE,
                         DownloadUpdate {
                             download_id,
-                            progress: 100
+                            progress: 100,
                         },
                     )?;
-        
+
                     Ok(())
                 }
             }
@@ -562,13 +580,12 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             download_id,
             new_progress,
         } => {
-
             let _ = server_data.window_manager.emit_to(
                 MAIN_WINDOW_LABEL,
                 WindowAction::DOWNLOAD_UPDATE,
                 DownloadUpdate {
                     download_id,
-                    progress: new_progress
+                    progress: new_progress,
                 },
             )?;
 
@@ -579,13 +596,12 @@ async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a
             download_id,
             cancel_reason,
         } => {
-            
             let _ = server_data.window_manager.emit_to(
                 MAIN_WINDOW_LABEL,
                 WindowAction::DOWNLOAD_CANCELED,
                 DownloadCanceled {
                     download_id,
-                    reason: cancel_reason
+                    reason: cancel_reason,
                 },
             )?;
 
@@ -778,7 +794,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                 None => {
                     error!("Directory missing {}", dir_id);
                     Err(DownloadError::DirectoryMissing)
-                },
+                }
                 Some((_, file)) => {
                     let mut clients = server_data.clients.lock().await;
                     let client = clients.iter_mut().find(|(_, c)| {
@@ -793,7 +809,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                         None => {
                             error!("Clients to download from not found");
                             Err(DownloadError::NoClientsConnected)
-                        },
+                        }
                         Some((_, c)) => {
                             let download_id = Uuid::new_v4();
                             let app_config =
@@ -837,18 +853,15 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             Ok(())
         }
 
-        WindowRequest::CancelDownload { download_identifier, peer } => {
+        WindowRequest::CancelDownload {
+            download_identifier,
+            peer,
+        } => {
             let download_id = Uuid::parse_str(&download_identifier)?;
             let peers = vec![peer];
-            server_data.broadcast(&peers, MessageFromServer::CancelDownload { download_id }).await;
-            // for (_, c) in clients.iter() {
-            //     if let Some(peer_id) = &c.id {
-            //         if &peer == peer_id {
-            //             let msg = ;
-            //             c.sender.send(msg).await?;
-            //         }
-            //     }
-            // }
+            server_data
+                .broadcast(&peers, MessageFromServer::CancelDownload { download_id })
+                .await;
 
             let _ = server_data.window_manager.emit_to(
                 MAIN_WINDOW_LABEL,

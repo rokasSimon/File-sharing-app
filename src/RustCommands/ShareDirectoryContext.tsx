@@ -29,7 +29,7 @@ type SharedFile = {
   lastModified: string;
   contentLocation: {
     localPath: string;
-  };
+  } | undefined;
   ownedPeers: Array<PeerId>;
   size: number;
 };
@@ -79,11 +79,6 @@ function ShareDirectoryProvider({ children }: any) {
       const _ = await listen<Array<SerialisedShareDirectory>>(
         "UpdateShareDirectories",
         (event) => {
-          console.log(
-            `Received ${JSON.stringify(
-              event.payload
-            )} from rust in UpdateShareDirectories`
-          );
           const input = event.payload;
           const dirs = input.map((dir) => {
             const fileMap = new Map<string, SharedFile>();
@@ -101,8 +96,6 @@ function ShareDirectoryProvider({ children }: any) {
 
             return directory;
           });
-
-          console.log(`Setting to ${JSON.stringify(dirs)}`);
 
           setDirectories(dirs);
         }
@@ -142,37 +135,9 @@ function ShareDirectoryProvider({ children }: any) {
           return 0;
         });
 
-        console.log("Updating to " + JSON.stringify(sortedDirectories));
-
         setDirectories(sortedDirectories);
       });
     };
-
-    // const startListenFileAdded = async () => {
-    //   const _ = await listen<AddedFiles>(
-    //     "AddedFiles",
-    //     (event) => {
-    //       const input = event.payload;
-    //       const directory = directoriesRef.current.find((dir) => {
-    //         console.log(`${dir.signature.identifier} === ${input.directoryIdentifier}`);
-
-    //         return dir.signature.identifier === input.directoryIdentifier;
-    //       });
-
-    //       if (directory) {
-    //         for (const file of input.sharedFiles) {
-    //           directory.shared_files.set(file.identifier, file);
-    //         }
-    //       }
-
-    //       const dirs = [
-    //         ...directoriesRef.current
-    //       ];
-
-    //       setDirectories(dirs);
-    //     }
-    //   );
-    // };
 
     const loadDirectories = async () => {
       const request: GetShareDirectories = {

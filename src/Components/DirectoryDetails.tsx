@@ -129,7 +129,7 @@ function DirectoryDetails({
   };
 
   const handleOpenFile = (file: SharedFile) => async () => {
-    if (file.contentLocation.localPath) {
+    if (file?.contentLocation?.localPath) {
       const result = await invoke("open_file", {
         message: {
           file_path: file.contentLocation.localPath,

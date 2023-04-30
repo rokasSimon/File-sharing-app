@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use postcard::fixint::le;
 use serde::{Serialize, Deserialize};
 use tokio_util::codec::{Encoder, Decoder};
@@ -34,6 +35,7 @@ pub enum TcpMessage {
         peer_id: PeerId,
         directory_identifier: Uuid,
         file_identifier: Uuid,
+        date_modified: DateTime<Utc>,
     },
 
     StartDownload {

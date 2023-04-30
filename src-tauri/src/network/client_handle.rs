@@ -2,6 +2,7 @@ use core::fmt;
 use std::{collections::HashMap, net::IpAddr, path::PathBuf, error::Error};
 
 use anyhow::{anyhow, Result};
+use chrono::{DateTime, Utc};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tauri::async_runtime::Mutex;
@@ -50,6 +51,7 @@ pub enum MessageFromServer {
         peer_id: PeerId,
         directory_identifier: Uuid,
         file_identifier: Uuid,
+        date_modified: DateTime<Utc>,
     },
 
     SharedDirectory(ShareDirectory),
@@ -582,7 +584,6 @@ async fn handle_tcp_message<'a>(
                 return Ok(());
             }
 
-            let myself = &data.client_data.server.peer_id;
             let mut directories = data.client_data.server.config.cached_data.lock().await;
             let mut download = downloads.remove(&download_id).unwrap();
             let directory = directories.get_mut(&download.dir_id);
@@ -601,9 +602,9 @@ async fn handle_tcp_message<'a>(
                             Err(DownloadError::FileMissing)
                         }
                         Some(file) => {
-                            file.owned_peers.push(myself.clone());
-                            file.content_location =
-                                ContentLocation::LocalPath(download.output_path.clone());
+                            directory.signature.last_modified = Utc::now();
+                            file.owned_peers.push(data.client_data.server.peer_id.clone());
+                            file.content_location = ContentLocation::LocalPath(download.output_path);
 
                             let _ = data
                                 .client_data
@@ -641,12 +642,13 @@ async fn handle_tcp_message<'a>(
             peer_id,
             directory_identifier,
             file_identifier,
+            date_modified,
         } => {
             let mut directories = data.client_data.server.config.cached_data.lock().await;
 
             if let Some(directory) = directories.get_mut(&directory_identifier) {
                 if let Some(file) = directory.shared_files.get_mut(&file_identifier) {
-                    file.owned_peers.push(peer_id);
+                    directory.add_owner(peer_id, date_modified, vec![file_identifier]);
 
                     data.client_data
                         .server
@@ -831,6 +833,7 @@ async fn handle_server_messages(
             peer_id,
             directory_identifier,
             file_identifier,
+            date_modified,
         } => {
             let _ = data
                 .tcp_write
@@ -838,6 +841,7 @@ async fn handle_server_messages(
                     peer_id,
                     directory_identifier,
                     file_identifier,
+                    date_modified
                 })
                 .await?;
 
