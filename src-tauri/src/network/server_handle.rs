@@ -194,7 +194,7 @@ impl WindowAction {
     pub const ERROR: &str = "Error";
     pub const DOWNLOAD_STARTED: &str = "DownloadStarted";
     pub const DOWNLOAD_UPDATE: &str = "DownloadUpdate";
-    pub const DOWNLOAD_CANCELED: &str = "CanceledDownload";
+    pub const DOWNLOAD_CANCELED: &str = "DownloadCanceled";
 }
 
 pub async fn server_loop(

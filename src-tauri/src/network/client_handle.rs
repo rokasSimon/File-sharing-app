@@ -846,8 +846,6 @@ async fn handle_server_messages(
 
         MessageFromServer::CancelDownload { download_id } => {
             info!("Server says to cancel download {}", download_id);
-            let mut downloads = data.downloads.lock().await;
-            downloads.remove(&download_id);
 
             let _ = data
                 .tcp_write
