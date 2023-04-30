@@ -1,0 +1,7 @@
+"filename", "language", "Rust", "TypeScript JSX", "comment", "blank", "total"
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\client_handle.rs", "Rust", 106, 0, 1, 24, 131
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec.rs", "Rust", 1, 0, 2, 1, 4
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server_handle.rs", "Rust", 1, 0, 26, 4, 31
+"e:\DEV\Rust\file-sharing-app\src\RustCommands\DownloadsManager.tsx", "TypeScript JSX", 0, 2, 0, 0, 2
+"e:\DEV\Rust\file-sharing-app\src\RustCommands\networkCommands.tsx", "TypeScript JSX", 0, 1, 0, 0, 1
+"Total", "-", 108, 3, 29, 29, 169
