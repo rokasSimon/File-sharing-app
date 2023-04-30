@@ -421,8 +421,8 @@ async fn handle_tcp_message<'a>(
                                 .expect("app should be running on a 64 bit system");
                             download.bytes_done += bytes_received;
 
-                            let percent = (download.bytes_done as f64 / download.bytes_total as f64)
-                                .round() as u64;
+                            let percent = (download.bytes_done as f64 / download.bytes_total as f64) * 100.0;
+                            let percent = percent.round() as u64;
 
                             if percent > 100 {
                                 download.canceled = true;
