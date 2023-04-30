@@ -23,7 +23,7 @@ use super::{
     server_handle::{ClientConnectionId, Download, ServerHandle},
 };
 
-const FILE_CHUNK_SIZE: usize = 1024 * 4;
+const FILE_CHUNK_SIZE: usize = 1024 * 50; // 50 KB
 
 #[derive(Clone, Debug)]
 pub enum MessageFromServer {
