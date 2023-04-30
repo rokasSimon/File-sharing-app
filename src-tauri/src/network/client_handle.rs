@@ -379,6 +379,8 @@ async fn handle_tcp_message<'a>(
 
             directory.remove_peer(peer, date_modified);
 
+            let _ = data.client_data.server.channel.send(MessageToServer::UpdatedDirectory(directory_identifier)).await?;
+
             Ok(())
         }
 
