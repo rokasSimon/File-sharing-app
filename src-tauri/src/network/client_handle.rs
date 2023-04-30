@@ -93,14 +93,6 @@ struct DownloadHandle {
     dir_id: Uuid,
 }
 
-impl Drop for DownloadHandle {
-    fn drop(&mut self) {
-        if self.canceled {
-            let _ = std::fs::remove_file(self.output_path.clone());
-        }
-    }
-}
-
 struct UploadHandle {
     canceled: bool,
 }
@@ -404,6 +396,7 @@ async fn handle_tcp_message<'a>(
         }
 
         TcpMessage::CancelDownload { download_id } => {
+            info!("Trying to cancel download {}", download_id);
             let mut uploads = data.uploads.lock().await;
             let upload = uploads.get_mut(&download_id);
 
@@ -778,6 +771,7 @@ async fn handle_server_messages(
         }
 
         MessageFromServer::CancelDownload { download_id } => {
+            info!("Server says to cancel download {}", download_id);
             let mut downloads = data.downloads.lock().await;
             downloads.remove(&download_id);
 
@@ -805,6 +799,9 @@ async fn disconnect_self(client_data_handle: &mut ClientDataHandle<'_>) {
         let mut downloads = client_data_handle.downloads.lock().await;
         for (_, download) in downloads.iter_mut() {
             download.canceled = true;
+            if let Ok(_) = download.output_file.shutdown().await {
+                let _ = fs::remove_file(download.output_path.clone()).await;
+            }
         }
     }
 
