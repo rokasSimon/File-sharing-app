@@ -557,6 +557,8 @@ async fn handle_tcp_message<'a>(
             if let Some(directory) = directories.get_mut(&directory_identifier) {
                 if let Some(file) = directory.shared_files.get_mut(&file_identifier) {
                     file.owned_peers.push(peer_id);
+
+                    data.client_data.server.channel.send(MessageToServer::UpdatedDirectory(directory_identifier)).await?;
                 }
             }
 
