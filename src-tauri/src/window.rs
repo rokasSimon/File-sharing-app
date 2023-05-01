@@ -24,7 +24,8 @@ pub async fn open_file(
     Ok(())
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Settings {
     minimize_on_close: bool,
     theme: String,
@@ -56,6 +57,7 @@ pub async fn save_settings(
     message: Settings,
     state: tauri::State<'_, Arc<StoredConfig>>
 ) -> Result<(), String> {
+    info!("Received new settings {:#?}", message);
     
     let mut config = state.app_config.lock().await;
 

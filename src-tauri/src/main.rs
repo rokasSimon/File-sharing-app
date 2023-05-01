@@ -74,6 +74,36 @@ fn main() {
     let loop_config = stored_data.clone();
     let settings_config = stored_data.clone();
     tauri::Builder::default()
+        .on_system_tray_event(|app, event| match event {
+            tauri::SystemTrayEvent::MenuItemClick { id, .. } => {
+                match id.as_str() {
+                    "exit" => {
+                        let window = app.get_window("main");
+
+                        if let Some(window) = window {
+                            let res = window.close();
+
+                            if let Err(e) = res {
+                                error!("Could not close main window{}", e);
+                            }
+                        }
+                    },
+                    _ => ()
+                }
+            }
+            tauri::SystemTrayEvent::LeftClick { .. } => {
+                let window = app.get_window("main");
+
+                if let Some(window) = window {
+                    let result = window.show();
+
+                    if let Err(e) = result {
+                        error!("Could not show window: {}", e);
+                    }
+                }
+            }
+            _ => ()
+        })
         .system_tray(system_tray)
         .manage(NetworkThreadSender {
             inner: Mutex::new(network_sender),
@@ -84,7 +114,13 @@ fn main() {
                 let config_lock = window_config.app_config.blocking_lock();
 
                 if config_lock.hide_on_close {
+                    info!("Trying to prevent close");
                     api.prevent_close();
+                    let hide_result = event.window().hide();
+
+                    if let Err(e) = hide_result {
+                        error!("Could not hide window: {}", e);
+                    }
                 }
             }
             tauri::WindowEvent::Destroyed => {

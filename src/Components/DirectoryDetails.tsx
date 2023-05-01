@@ -43,7 +43,6 @@ import {
 } from "../RustCommands/networkCommands";
 import React from "react";
 import { invoke } from "@tauri-apps/api";
-import { ConnectedDevicesContext } from "../RustCommands/ConnectedDevicesContext";
 import { ErrorContext } from "../App";
 
 type DirectoryDetailsProps = {

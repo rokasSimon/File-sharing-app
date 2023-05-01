@@ -2,58 +2,110 @@ import {
   Box,
   Button,
   Container,
-  FormControlLabel,
+  Divider,
   FormGroup,
   Paper,
   Stack,
   Switch,
-  TextField,
   Typography,
 } from "@mui/material";
 import { invoke } from "@tauri-apps/api";
+import { open } from "@tauri-apps/api/dialog";
 import React from "react";
-import { ThemeContext } from "../App";
+import { Settings, SettingsContext, ThemeContext } from "../App";
 
-type Settings = {
-  minimizeOnClose: boolean;
-  theme: "light" | "dark";
-  downloadDirectory: string;
-};
+// type Settings = {
+//   minimizeOnClose: boolean;
+//   theme: "light" | "dark";
+//   downloadDirectory: string;
+// };
 
-function Settings() {
-  const theme = React.useContext(ThemeContext);
-  const [settings, setSettings] = React.useState<Settings | null>(null);
-  const settingsRef = React.useRef(settings);
-  const loaded = React.useRef(false);
+function SettingsPage() {
+    const { mode, toggleTheme } = React.useContext(ThemeContext);
+    const { settings, updateSettings } = React.useContext(SettingsContext);
+//   const theme = React.useContext(ThemeContext);
+//   const [settings, setSettings] = React.useState<Settings>({
+//     theme: theme.mode,
+//     downloadDirectory: "",
+//     minimizeOnClose: false
+//   });
+//   const settingsRef = React.useRef(settings);
+//   const loaded = React.useRef(false);
 
-  React.useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
+//   React.useEffect(() => {
+//     settingsRef.current = settings;
+//   }, [settings]);
 
-  React.useEffect(() => {
-    if (loaded.current) return;
+//   React.useEffect(() => {
+//     if (loaded.current) return;
 
-    const getSettings = async () => {
-      const loadedSettings = await invoke<Settings | string>("get_settings", {
-        message: "",
-      });
+//     const getSettings = async () => {
+//       const loadedSettings = await invoke<Settings | string>("get_settings", {
+//         message: "",
+//       });
 
-      if (typeof loadedSettings == "string") {
-        console.error(loadedSettings);
-      } else {
-        setSettings(loadedSettings);
-      }
-    };
+//       if (typeof loadedSettings == "string") {
+//         console.error(loadedSettings);
+//       } else {
+//         if (loadedSettings.theme !== theme.mode) {
+//             theme.toggleTheme();
+//         }
 
-    getSettings();
+//         setSettings(loadedSettings);
+//       }
+//     };
 
-    loaded.current = true;
-  }, []);
+//     getSettings();
+
+//     loaded.current = true;
+//   }, []);
 
   const handleSave = async () => {
-    if (settings) {
-      await invoke("save_settings", { message: settings });
+    const newSettings = {
+        ...settings,
+        theme: mode
+    };
+    
+    updateSettings(newSettings);
+
+    await invoke("save_settings", { message: newSettings });
+  };
+
+  const handleSaveDirectoryChange = async () => {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+    });
+
+    if (typeof selected == "string") {
+        const newSettings: Settings = {
+          ...settings,
+          downloadDirectory: selected,
+        };
+
+        updateSettings(newSettings);
+      }
+  };
+
+  const handleShowCurrentDirectory = async () => {
+    if (settings.downloadDirectory) {
+      await invoke("open_file", {
+        message: {
+          file_path: settings.downloadDirectory,
+        },
+      });
     }
+  };
+
+  const handleChangeMinimize = async () => {
+    const newMinimizeOption = !settings.minimizeOnClose;
+
+    const newSettings: Settings = {
+        ...settings,
+        minimizeOnClose: newMinimizeOption
+    };
+
+    updateSettings(newSettings);
   };
 
   return (
@@ -64,27 +116,38 @@ function Settings() {
             <Typography variant="h3" marginBottom={"0.75em"}>
               Settings
             </Typography>
-            <Stack direction="row" sx={{ marginBottom: '1em' }}>
+            <Stack
+              direction="row"
+              sx={{ marginBottom: "1em" }}
+              spacing={2}
+              divider={<Divider orientation="vertical" flexItem />}
+            >
               <Stack spacing={1}>
                 <FormGroup>
                   <Typography>Minimize On Close</Typography>
-                  <Switch checked={settings.minimizeOnClose} />
+                  <Switch checked={settings.minimizeOnClose} onChange={handleChangeMinimize} />
                 </FormGroup>
                 <FormGroup>
                   <Typography>Theme</Typography>
                   <Switch
-                    checked={theme.mode === "dark"}
-                    onChange={() => theme.toggleTheme()}
+                    checked={mode === "dark"}
+                    onChange={() => toggleTheme()}
                   />
                 </FormGroup>
               </Stack>
               <Stack>
                 <FormGroup>
-                    <TextField value={settings.downloadDirectory} disabled />
+                  <Typography>Save Directory</Typography>
+                  <Button variant="contained" style={{ margin: '0.5em 0em' }} onClick={handleShowCurrentDirectory}>
+                    Show Folder
+                  </Button>
+                  <Button variant="contained" style={{ margin: '0.5em 0em' }} onClick={handleSaveDirectoryChange}>
+                    Set Directory
+                  </Button>
                 </FormGroup>
               </Stack>
             </Stack>
-            <Button color="success" onClick={handleSave}>
+            <Button color="success" onClick={handleSave} variant="contained">
               Save
             </Button>
           </Box>
@@ -94,4 +157,4 @@ function Settings() {
   );
 }
 
-export default Settings;
+export default SettingsPage;
