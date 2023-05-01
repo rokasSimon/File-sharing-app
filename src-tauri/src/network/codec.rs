@@ -1,10 +1,15 @@
+mod protobuf_map;
+
 use chrono::{DateTime, Utc};
+use prost::Message;
 use serde::{Serialize, Deserialize};
 use tokio_util::codec::{Encoder, Decoder};
 use bytes::{BytesMut, BufMut, Buf};
 use uuid::Uuid;
 
 use crate::{peer_id::PeerId, data::{ShareDirectorySignature, ShareDirectory, SharedFile}};
+
+use self::protobuf_map::protobuf_types;
 
 use super::client_handle::DownloadError;
 
@@ -76,7 +81,7 @@ impl Encoder<TcpMessage> for MessageCodec {
     type Error = std::io::Error;
 
     fn encode(&mut self, item: TcpMessage, dst: &mut BytesMut) -> Result<(), Self::Error> {
-        let encoded_message = match encode_message(item) {
+        let encoded_message = match encode_protobuf(item) {
             Ok(msg) => msg,
             Err(e) => return Err(e)
         };
@@ -122,35 +127,51 @@ impl Decoder for MessageCodec {
         let data = src[LENGTH_MARKER_SIZE..full_length].to_vec();
         src.advance(full_length);
 
-        decode_message(data)
+        decode_protobuf(data)
     }
 }
 
-fn decode_message(src: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
+pub fn decode_protobuf(mut data: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
+    let decoded_raw = protobuf_types::TcpMessage::decode(&data[..]);
 
-    let result = match serde_json::from_slice(&src) {
-        Ok(tcp_message) => {
-            //info!("decoded {:?}", tcp_message);
-
-            Ok(Some(tcp_message))
+    let decoded_raw = match decoded_raw {
+        Ok(tcp_message) => match tcp_message.message {
+            Some(msg) => msg,
+            None => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Received empty message"),
+                ))
+            }
         },
         Err(decode_err) => {
-            Err(std::io::Error::new(
+            return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Could not parse message from received buffer: {}", decode_err),
+                format!(
+                    "Could not parse message from received buffer: {}",
+                    decode_err
+                ),
             ))
         }
     };
 
-    result
+    let msg = decoded_raw.try_into()?;
+
+    Ok(Some(msg))
 }
 
-fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
+pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
     match &src {
         TcpMessage::ReceiveFilePart { data, download_id } => (),
         _ => info!("Encoding {:?}", src)
     }
-    let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
+
+    let msg = src.try_into()?;
+    let mut raw_msg = protobuf_types::TcpMessage::default();
+    raw_msg.message = Some(msg);
+    let enc = protobuf_types::TcpMessage::encode_to_vec(&raw_msg);
+
+    //let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
     let len = enc.len() + LENGTH_MARKER_SIZE;
 
     if len > MAX_MESSAGE_SIZE {
@@ -162,3 +183,40 @@ fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
 
     Ok(enc)
 }
+
+// fn decode_message(src: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
+
+//     let result = match serde_json::from_slice(&src) {
+//         Ok(tcp_message) => {
+//             //info!("decoded {:?}", tcp_message);
+
+//             Ok(Some(tcp_message))
+//         },
+//         Err(decode_err) => {
+//             Err(std::io::Error::new(
+//                 std::io::ErrorKind::InvalidData,
+//                 format!("Could not parse message from received buffer: {}", decode_err),
+//             ))
+//         }
+//     };
+
+//     result
+// }
+
+// fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
+//     match &src {
+//         TcpMessage::ReceiveFilePart { data, download_id } => (),
+//         _ => info!("Encoding {:?}", src)
+//     }
+//     let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
+//     let len = enc.len() + LENGTH_MARKER_SIZE;
+
+//     if len > MAX_MESSAGE_SIZE {
+//         // split large messages into parts
+//         error!("Message too large to encode!");
+        
+//         return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Message too large to encode")));
+//     }
+
+//     Ok(enc)
+// }

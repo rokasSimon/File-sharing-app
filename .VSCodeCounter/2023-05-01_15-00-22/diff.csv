@@ -1,0 +1,12 @@
+"filename", "language", "Rust", "TOML", "TypeScript JSX", "Protocol Buffers", "comment", "blank", "total"
+"e:\DEV\Rust\file-sharing-app\src-tauri\Cargo.toml", "TOML", 0, 2, 0, 0, 0, 0, 2
+"e:\DEV\Rust\file-sharing-app\src-tauri\build.rs", "Rust", 3, 0, 0, 0, 0, 3, 6
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\main.rs", "Rust", 31, 0, 0, 0, 0, 5, 36
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec.rs", "Rust", 0, 0, 0, 0, 0, 1, 1
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec\protobuf_map.rs", "Rust", 120, 0, 0, 0, 1, 22, 143
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec\tcpMessages.proto", "Protocol Buffers", 0, 0, 0, 115, 0, 23, 138
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\window.rs", "Rust", 2, 0, 0, 0, 0, 0, 2
+"e:\DEV\Rust\file-sharing-app\src\App.tsx", "TypeScript JSX", 0, 0, 43, 0, 0, 6, 49
+"e:\DEV\Rust\file-sharing-app\src\Components\DirectoryDetails.tsx", "TypeScript JSX", 0, 0, -1, 0, 0, 0, -1
+"e:\DEV\Rust\file-sharing-app\src\pages\Settings.tsx", "TypeScript JSX", 0, 0, 19, 0, 34, 10, 63
+"Total", "-", 156, 2, 61, 115, 35, 70, 439

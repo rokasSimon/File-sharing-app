@@ -1,0 +1,138 @@
+syntax = "proto2";
+
+package FileShare.TcpMessages;
+
+message TcpMessage {
+    oneof message {
+      SignalType Signal = 1;
+      DeleteFile DeleteFile = 2;
+      AddedFiles AddedFiles = 3;
+      ReceivePeerId ReceivePeerId = 4;
+      ReceiveDirectories ReceiveDirectories = 5;
+      DownloadedFile DownloadedFile = 6;
+      StartDownload StartDownload = 7;
+      CancelDownload CancelDownload = 8;
+      ReceiveFilePart ReceiveFilePart = 9;
+      ReceiveFileEnd ReceiveFileEnd = 10;
+      DownloadError DownloadError = 11;
+      SharedDirectory SharedDirectory = 12;
+      LeftDirectory LeftDirectory = 13;
+    }
+  }
+  
+  enum SignalType {
+    RequestPeerId = 0;
+    Synchronize = 1;
+  }
+  
+  message ReceivePeerId {
+    required PeerId peer_id = 1;
+  }
+  
+  message ReceiveDirectories {
+    repeated ShareDirectory directories = 1;
+  }
+  
+  message DeleteFile {
+    required PeerId peer_id = 1;
+    required ShareDirectorySignature directory = 2;
+    required Uuid file_identifier = 3;
+  }
+  
+  message AddedFiles {
+    required ShareDirectorySignature directory = 1;
+    repeated SharedFile files = 2;
+  }
+  
+  message DownloadedFile {
+    required PeerId peer_id = 1;
+    required Uuid directory_identifier = 2;
+    required Uuid file_identifier = 3;
+    required DateTime date_modified = 4;
+  }
+  
+  message StartDownload {
+    required Uuid download_id = 1;
+    required Uuid file_id = 2;
+    required Uuid dir_id = 3;
+  }
+  
+  message CancelDownload {
+    required Uuid download_id = 1;
+  }
+  
+  message ReceiveFilePart {
+    required Uuid download_id = 1;
+    required bytes data = 2;
+  }
+  
+  message ReceiveFileEnd {
+    required Uuid download_id = 1;
+  }
+  
+  message DownloadError {
+    required Uuid download_id = 1;
+    required DownloadErrorType error = 2;
+  }
+  
+  message SharedDirectory {
+    required ShareDirectory directory = 1;
+  }
+  
+  message LeftDirectory {
+    required Uuid directory_identifier = 1;
+    required DateTime date_modified = 2;
+  }
+  
+  message ShareDirectory {
+    required ShareDirectorySignature signature = 1;
+    map<string, SharedFile> shared_files = 2;
+  }
+  
+  message ShareDirectorySignature {
+    required string name = 1;
+    required Uuid identifier = 2;
+    required DateTime last_modified = 3;
+    repeated PeerId shared_peers = 4;
+  }
+  
+  message SharedFile {
+    required string name = 1;
+    required Uuid identifier = 2;
+    required uint64 content_hash = 3;
+    required DateTime last_modified = 4;
+    required ContentLocation content_location = 5;
+    repeated PeerId owned_peers = 6;
+    required uint64 size = 7;
+  }
+  
+  message ContentLocation {
+    oneof content_location {
+      string local_path = 1;
+    }
+  }
+  
+  message PeerId {
+    required string hostname = 1;
+    required Uuid uuid = 2;
+  }
+  
+  message Uuid {
+    required bytes data = 1;
+  }
+
+  message DateTime {
+    required string date = 1;
+  }
+  
+  enum DownloadErrorType {
+      NoClientsConnected = 0;
+      DirectoryMissing = 1;
+      FileMissing = 2;
+      FileNotOwned = 3;
+      FileTooLarge = 4;
+      Disconnected = 5;
+      Canceled = 6;
+      ReadError = 7;
+      WriteError = 8;
+  }
