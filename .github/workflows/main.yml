@@ -31,6 +31,7 @@ jobs:
         uses: arduino/setup-protoc@v1
         with:
           version: '3.9.1'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: install frontend dependencies
         run: npm install # change this to npm or pnpm depending on which one you use
       - uses: tauri-apps/tauri-action@v0
