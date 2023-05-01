@@ -26,14 +26,14 @@ use network::{
     get_ipv4_intf,
     mdns::{start_mdns, MessageToMdns},
     network_command,
-    server_handle::{server_loop, MessageToServer, ServerHandle},
+    server::{server_loop, MessageToServer, ServerHandle},
     tcp_listener::start_accept,
     NetworkThreadSender,
 };
 
 use crate::{
     config::{load_stored_data, save_config_loop, write_stored_data},
-    network::server_handle::WindowRequest,
+    network::server::WindowRequest,
     window::{open_file, save_settings, get_settings},
 };
 

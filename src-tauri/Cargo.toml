@@ -18,7 +18,7 @@ prost-build = "0.11.9"
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.2.4", features = ["dialog-message", "dialog-open", "dialog-save", "system-tray", "window-close", "window-hide", "window-maximize", "window-minimize", "window-set-focus", "window-set-resizable", "window-show", "window-start-dragging", "window-unmaximize", "window-unminimize"] }
+tauri = { version = "1.2.4", features = ["devtools", "dialog-message", "dialog-open", "dialog-save", "system-tray", "window-close", "window-hide", "window-maximize", "window-minimize", "window-set-focus", "window-set-resizable", "window-show", "window-start-dragging", "window-unmaximize", "window-unminimize"] }
 window-shadows = "0.2.1"
 log = "0.4.17"
 pretty_env_logger = "0.4.0"

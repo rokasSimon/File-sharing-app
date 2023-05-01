@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     data::{ContentLocation, ShareDirectory, ShareDirectorySignature, SharedFile},
-    network::client_handle::DownloadError,
+    network::client::DownloadError,
     peer_id::PeerId,
 };
 
@@ -199,7 +199,7 @@ impl TryFrom<protobuf_types::Uuid> for Uuid {
 
     fn try_from(value: protobuf_types::Uuid) -> Result<Self, Self::Error> {
         match Uuid::from_slice(&value.data[..]) {
-            Err(e) => Err(std::io::Error::new(
+            Err(_) => Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Could not parse UUID"),
             )),
@@ -226,7 +226,7 @@ impl TryFrom<protobuf_types::DateTime> for DateTime<Utc> {
 
     fn try_from(value: protobuf_types::DateTime) -> Result<Self, Self::Error> {
         match DateTime::<Utc>::from_str(&value.date) {
-            Err(e) => Err(std::io::Error::new(
+            Err(_) => Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Invalid date time string"),
             )),
@@ -290,7 +290,7 @@ impl TryFrom<protobuf_types::ShareDirectory> for ShareDirectory {
         for (id, file) in value.shared_files {
             let file = file.try_into()?;
             let id = match Uuid::from_str(&id) {
-                Err(e) => {
+                Err(_) => {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
                         format!("Invalid date time string"),

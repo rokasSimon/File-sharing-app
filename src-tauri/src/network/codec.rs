@@ -11,7 +11,7 @@ use crate::{peer_id::PeerId, data::{ShareDirectorySignature, ShareDirectory, Sha
 
 use self::protobuf_map::protobuf_types;
 
-use super::client_handle::DownloadError;
+use super::client::DownloadError;
 
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 100; // 100 MB
 const LENGTH_MARKER_SIZE: usize = 4;
@@ -131,7 +131,7 @@ impl Decoder for MessageCodec {
     }
 }
 
-pub fn decode_protobuf(mut data: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
+pub fn decode_protobuf(data: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
     let decoded_raw = protobuf_types::TcpMessage::decode(&data[..]);
 
     let decoded_raw = match decoded_raw {
@@ -162,7 +162,7 @@ pub fn decode_protobuf(mut data: Vec<u8>) -> Result<Option<TcpMessage>, std::io:
 
 pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
     match &src {
-        TcpMessage::ReceiveFilePart { data, download_id } => (),
+        TcpMessage::ReceiveFilePart { data: _, download_id: _ } => (),
         _ => info!("Encoding {:?}", src)
     }
 
@@ -171,7 +171,6 @@ pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
     raw_msg.message = Some(msg);
     let enc = protobuf_types::TcpMessage::encode_to_vec(&raw_msg);
 
-    //let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
     let len = enc.len() + LENGTH_MARKER_SIZE;
 
     if len > MAX_MESSAGE_SIZE {
@@ -183,40 +182,3 @@ pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
 
     Ok(enc)
 }
-
-// fn decode_message(src: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Error> {
-
-//     let result = match serde_json::from_slice(&src) {
-//         Ok(tcp_message) => {
-//             //info!("decoded {:?}", tcp_message);
-
-//             Ok(Some(tcp_message))
-//         },
-//         Err(decode_err) => {
-//             Err(std::io::Error::new(
-//                 std::io::ErrorKind::InvalidData,
-//                 format!("Could not parse message from received buffer: {}", decode_err),
-//             ))
-//         }
-//     };
-
-//     result
-// }
-
-// fn encode_message(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
-//     match &src {
-//         TcpMessage::ReceiveFilePart { data, download_id } => (),
-//         _ => info!("Encoding {:?}", src)
-//     }
-//     let enc = serde_json::to_vec(&src).expect("TcpMessage enum values should serialize without trouble");
-//     let len = enc.len() + LENGTH_MARKER_SIZE;
-
-//     if len > MAX_MESSAGE_SIZE {
-//         // split large messages into parts
-//         error!("Message too large to encode!");
-        
-//         return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Message too large to encode")));
-//     }
-
-//     Ok(enc)
-// }

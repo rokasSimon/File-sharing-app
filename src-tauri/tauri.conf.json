@@ -72,7 +72,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.tauri.dev",
+      "identifier": "com.ktu.fs",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
@@ -91,7 +91,7 @@
       }
     },
     "security": {
-      "csp": "default-src 'self'"
+      "csp": "default-src blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-inline' 'self' img-src:; script-src http: https: 'unsafe-inline';"
     },
     "updater": {
       "active": false

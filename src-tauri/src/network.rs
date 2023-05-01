@@ -1,17 +1,19 @@
 pub mod mdns;
-pub mod server_handle;
-mod client_handle;
+pub mod server;
+mod client;
 pub mod tcp_listener;
 mod codec;
 
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, IpAddr};
 
 use if_addrs::IfAddr;
 use tokio::sync::mpsc;
 use tauri::async_runtime::Mutex;
 use anyhow::Result;
 
-use self::server_handle::WindowRequest;
+use self::server::WindowRequest;
+
+pub type ClientConnectionId = IpAddr;
 
 pub struct NetworkThreadSender {
     pub inner: Mutex<mpsc::Sender<WindowRequest>>

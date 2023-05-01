@@ -280,6 +280,7 @@ function Directories() {
       };
 
       await invokeNetworkCommand(request);
+      handleLeaveClose();
     }
   };
 
@@ -349,7 +350,7 @@ function Directories() {
               handleLeaveOpen(optDirectory?.signature?.identifier)
             }
           >
-            Remove
+            Leave
           </MenuItem>
           <MenuItem
             onClick={() => handleShareOpen(optDirectory?.signature?.identifier)}

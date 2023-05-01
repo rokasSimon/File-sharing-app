@@ -17,13 +17,13 @@ use uuid::Uuid;
 
 use crate::{
     data::{ContentLocation, ShareDirectory, ShareDirectorySignature, SharedFile},
-    network::{server_handle::MessageToServer, codec::TcpMessage},
+    network::{server::MessageToServer, codec::TcpMessage},
     peer_id::PeerId,
 };
 
 use super::{
-    codec::{MessageCodec},
-    server_handle::{ClientConnectionId, Download, ServerHandle},
+    codec::MessageCodec,
+    server::{Download, ServerHandle}, ClientConnectionId,
 };
 
 const FILE_CHUNK_SIZE: usize = 1024 * 50; // 50 KB
@@ -54,7 +54,6 @@ pub enum MessageFromServer {
         date_modified: DateTime<Utc>,
     },
 
-    SharedDirectory(ShareDirectory),
     LeftDirectory {
         directory_identifier: Uuid,
     }
@@ -208,8 +207,6 @@ async fn handle_uploads<'a>(
         match upload_result {
             Err(error) => {
                 uploads_to_remove.push(*download_id);
-
-                info!("Download {} errored out because {}", download_id, error);
 
                 let _ = client_data.tcp_write.send(TcpMessage::DownloadError { error, download_id: *download_id }).await;
             },
@@ -518,7 +515,7 @@ async fn handle_tcp_message<'a>(
 
             let result = match download {
                 None => {
-                    //error!("Received file part for unknown download");
+                    error!("Received file part for unknown download");
 
                     return Ok(());
                 }
@@ -526,7 +523,7 @@ async fn handle_tcp_message<'a>(
                     let res = download.output_file.write_all(&raw_data).await;
 
                     match res {
-                        Err(e) => {
+                        Err(_) => {
                             download.canceled = true;
                             Err(DownloadError::WriteError)
                         }
@@ -673,7 +670,7 @@ async fn handle_tcp_message<'a>(
             let mut directories = data.client_data.server.config.cached_data.lock().await;
 
             if let Some(directory) = directories.get_mut(&directory_identifier) {
-                if let Some(file) = directory.shared_files.get_mut(&file_identifier) {
+                if let Some(_) = directory.shared_files.get_mut(&file_identifier) {
                     directory.add_owner(peer_id, date_modified, vec![file_identifier]);
 
                     data.client_data
@@ -696,18 +693,6 @@ async fn handle_server_messages(
     match msg {
         MessageFromServer::GetPeerId => {
             data.tcp_write.send(TcpMessage::RequestPeerId).await?;
-
-            Ok(())
-        }
-
-        MessageFromServer::SharedDirectory(mut directory) => {
-            for (_, file) in directory.shared_files.iter_mut() {
-                file.content_location = ContentLocation::NetworkOnly;
-            }
-
-            data.tcp_write
-                .send(TcpMessage::SharedDirectory(directory))
-                .await?;
 
             Ok(())
         }

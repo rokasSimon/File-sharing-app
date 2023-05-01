@@ -1,11 +1,7 @@
 use std::{
-    cmp::Eq,
-    collections::{HashMap, HashSet, VecDeque},
-    fmt::Display,
-    fs::File,
-    hash::Hash,
+    collections::{HashMap, VecDeque},
     net::{IpAddr, SocketAddr, SocketAddrV4},
-    path::{Path, PathBuf},
+    path::PathBuf,
     str::FromStr,
     sync::Arc,
     time::Duration,
@@ -13,7 +9,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail, Result};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use cryptohelpers::crc::compute_stream;
 use mdns_sd::ServiceInfo;
 use serde::{Deserialize, Serialize};
@@ -25,7 +21,6 @@ use tokio::{
     fs,
     net::TcpStream,
     sync::{
-        broadcast,
         mpsc::{self, Sender},
         MutexGuard,
     },
@@ -39,8 +34,8 @@ use crate::{
 };
 
 use super::{
-    client_handle::{client_loop, ClientData, DownloadError, MessageFromServer},
-    mdns::MessageToMdns,
+    client::{client_loop, ClientData, DownloadError, MessageFromServer},
+    mdns::MessageToMdns, ClientConnectionId,
 };
 
 const CHANNEL_SIZE: usize = 16;
@@ -95,12 +90,10 @@ struct DownloadNotStarted {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BackendError {
+struct BackendError {
     pub error: String,
     pub title: String,
 }
-
-pub type ClientConnectionId = IpAddr;
 
 #[derive(Debug)]
 pub enum MessageToServer {
@@ -273,7 +266,7 @@ async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
     }
 }
 
-async fn handle_message<'a>(msg: MessageToServer, mut server_data: ServerData<'a>) -> Result<()> {
+async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -> Result<()> {
     match msg {
         MessageToServer::ServiceFound(service) => {
             let ip_addr = service.get_addresses().iter().next();

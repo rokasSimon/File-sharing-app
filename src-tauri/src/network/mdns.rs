@@ -12,7 +12,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::peer_id::PeerId;
 
-use super::server_handle::{MessageToServer, ServerHandle};
+use super::server::{MessageToServer, ServerHandle};
 
 pub const SERVICE_TYPE: &str = "_ktu_fileshare._tcp.local.";
 pub const MDNS_UPDATE_TIME: u64 = 15;
@@ -34,10 +34,6 @@ pub struct ResolvedServiceInfo {
 pub enum ServiceStatus {
     Disconnected(DateTime<Utc>),
     Connected,
-}
-
-pub struct MdnsHandle {
-    pub info: ServiceInfo,
 }
 
 pub async fn start_mdns(
@@ -78,8 +74,7 @@ pub async fn start_mdns(
 
     let reconnect_time = chrono::Duration::seconds(RECONNECT_TIME);
     let mut reregister_interval = tokio::time::interval(Duration::from_secs(MDNS_UPDATE_TIME));
-    let mut resolved_services: Mutex<HashMap<String, ResolvedServiceInfo>> =
-        Mutex::new(HashMap::new());
+    let resolved_services: Mutex<HashMap<String, ResolvedServiceInfo>> = Mutex::new(HashMap::new());
 
     loop {
         tokio::select! {
