@@ -166,7 +166,7 @@ pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
         _ => info!("Encoding {:?}", src)
     }
 
-    let msg = src.try_into()?;
+    let msg = src.into();
     let mut raw_msg = protobuf_types::TcpMessage::default();
     raw_msg.message = Some(msg);
     let enc = protobuf_types::TcpMessage::encode_to_vec(&raw_msg);

@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{collections::HashMap, net::IpAddr, path::PathBuf, error::Error};
+use std::{collections::HashMap, path::PathBuf, error::Error};
 
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
@@ -17,12 +17,12 @@ use uuid::Uuid;
 
 use crate::{
     data::{ContentLocation, ShareDirectory, ShareDirectorySignature, SharedFile},
-    network::server_handle::MessageToServer,
+    network::{server_handle::MessageToServer, codec::TcpMessage},
     peer_id::PeerId,
 };
 
 use super::{
-    codec::{MessageCodec, TcpMessage},
+    codec::{MessageCodec},
     server_handle::{ClientConnectionId, Download, ServerHandle},
 };
 
@@ -62,7 +62,7 @@ pub enum MessageFromServer {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DownloadError {
-    NoClientsConnected,
+    NoClientsConnected = 0,
     DirectoryMissing,
     FileMissing,
     FileNotOwned,

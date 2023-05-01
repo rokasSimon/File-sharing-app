@@ -14,6 +14,8 @@ use crate::{
     peer_id::PeerId,
 };
 
+use self::protobuf_types::{AddedFiles, CancelDownload, DeleteFile, SignalType};
+
 fn map_files(files: Vec<protobuf_types::SharedFile>) -> Result<Vec<SharedFile>, std::io::Error> {
     let mut mapped = vec![];
 
@@ -26,7 +28,19 @@ fn map_files(files: Vec<protobuf_types::SharedFile>) -> Result<Vec<SharedFile>, 
     Ok(mapped)
 }
 
-fn map_directories(dirs: Vec<protobuf_types::ShareDirectory>) -> Result<Vec<ShareDirectory>, std::io::Error> {
+fn map_files_out(files: Vec<SharedFile>) -> Vec<protobuf_types::SharedFile> {
+    let mut mapped = vec![];
+
+    for file in files {
+        mapped.push(file.into());
+    }
+
+    mapped
+}
+
+fn map_directories(
+    dirs: Vec<protobuf_types::ShareDirectory>,
+) -> Result<Vec<ShareDirectory>, std::io::Error> {
     let mut mapped = vec![];
 
     for dir in dirs {
@@ -38,11 +52,79 @@ fn map_directories(dirs: Vec<protobuf_types::ShareDirectory>) -> Result<Vec<Shar
     Ok(mapped)
 }
 
-impl TryFrom<super::TcpMessage> for protobuf_types::tcp_message::Message {
-    type Error = std::io::Error;
+fn map_directories_out(dirs: Vec<ShareDirectory>) -> Vec<protobuf_types::ShareDirectory> {
+    let mut mapped = vec![];
 
-    fn try_from(value: super::TcpMessage) -> Result<Self, Self::Error> {
-        value.try_into()
+    for dir in dirs {
+        mapped.push(dir.into());
+    }
+
+    mapped
+}
+
+impl From<super::TcpMessage> for protobuf_types::tcp_message::Message {
+    fn from(value: super::TcpMessage) -> Self {
+        match value {
+
+            super::TcpMessage::AddedFiles { directory, files } => {
+                tcp_message::Message::AddedFiles(AddedFiles {
+                    directory: directory.into(),
+                    files: map_files_out(files),
+                })
+            }
+
+            super::TcpMessage::CancelDownload { download_id } => {
+                tcp_message::Message::CancelDownload(CancelDownload {
+                    download_id: download_id.into(),
+                })
+            }
+
+            super::TcpMessage::DeleteFile {
+                peer_id,
+                directory,
+                file,
+            } => tcp_message::Message::DeleteFile(DeleteFile {
+                peer_id: peer_id.into(),
+                directory: directory.into(),
+                file_identifier: file.into(),
+            }),
+
+            super::TcpMessage::DownloadError { error, download_id } => {
+                tcp_message::Message::DownloadError(protobuf_types::DownloadError {
+                    download_id: download_id.into(),
+                    error: error as i32,
+                })
+            }
+
+            super::TcpMessage::DownloadedFile {
+                peer_id,
+                directory_identifier,
+                file_identifier,
+                date_modified,
+            } => tcp_message::Message::DownloadedFile(protobuf_types::DownloadedFile {
+                peer_id: peer_id.into(),
+                directory_identifier: directory_identifier.into(),
+                file_identifier: file_identifier.into(),
+                date_modified: date_modified.into(),
+            }),
+
+            super::TcpMessage::LeftDirectory {
+                directory_identifier,
+                date_modified,
+            } => tcp_message::Message::LeftDirectory(protobuf_types::LeftDirectory {
+                directory_identifier: directory_identifier.into(),
+                date_modified: date_modified.into(),
+            }),
+
+            super::TcpMessage::ReceiveDirectories(dirs) => tcp_message::Message::ReceiveDirectories(protobuf_types::ReceiveDirectories { directories: map_directories_out(dirs) }),
+            super::TcpMessage::ReceiveFileEnd { download_id } => tcp_message::Message::ReceiveFileEnd( protobuf_types::ReceiveFileEnd { download_id: download_id.into() }),
+            super::TcpMessage::ReceiveFilePart { download_id, data } => tcp_message::Message::ReceiveFilePart( protobuf_types::ReceiveFilePart { download_id: download_id.into(), data }),
+            super::TcpMessage::ReceivePeerId(id) => tcp_message::Message::ReceivePeerId( protobuf_types::ReceivePeerId { peer_id: id.into() }),
+            super::TcpMessage::RequestPeerId => tcp_message::Message::Signal(SignalType::RequestPeerId.into()),
+            super::TcpMessage::SharedDirectory(dir) => tcp_message::Message::SharedDirectory( protobuf_types::SharedDirectory { directory: dir.into() }),
+            super::TcpMessage::StartDownload { download_id, file_id, dir_id } => tcp_message::Message::StartDownload( protobuf_types::StartDownload { download_id: download_id.into(), file_id: file_id.into(), dir_id: dir_id.into() }),
+            super::TcpMessage::Synchronize => tcp_message::Message::Signal(SignalType::Synchronize.into()),
+        }
     }
 }
 
@@ -51,47 +133,23 @@ impl TryFrom<protobuf_types::tcp_message::Message> for super::TcpMessage {
 
     fn try_from(value: protobuf_types::tcp_message::Message) -> Result<Self, Self::Error> {
         match value {
-            tcp_message::Message::AddedFiles(added_files) => Ok(super::TcpMessage::AddedFiles {
-                directory: added_files.directory.try_into()?,
-                files: map_files(added_files.files)?,
-            }),
-            tcp_message::Message::DeleteFile(delete_file) => Ok(super::TcpMessage::DeleteFile {
-                peer_id: delete_file.peer_id.try_into()?,
-                directory: delete_file.directory.try_into()?,
-                file: delete_file.file_identifier.try_into()?,
-            }),
+            tcp_message::Message::AddedFiles(added_files) => added_files.try_into(),
+            tcp_message::Message::DeleteFile(delete_file) => delete_file.try_into(),
             tcp_message::Message::Signal(signal) => {
                 Ok(protobuf_types::SignalType::from_i32(signal)
                     .unwrap_or_default()
                     .into())
             }
-            tcp_message::Message::CancelDownload(cancel_download) => {
-                Ok(super::TcpMessage::CancelDownload {
-                    download_id: cancel_download.download_id.try_into()?,
-                })
-            }
-            tcp_message::Message::DownloadError(err) => Ok(super::TcpMessage::DownloadError {
-                error: protobuf_types::DownloadErrorType::from_i32(err.error)
-                    .unwrap_or_default()
-                    .into(),
-                download_id: err.download_id.try_into()?,
-            }),
-            tcp_message::Message::DownloadedFile(d) => Ok(super::TcpMessage::DownloadedFile {
-                peer_id: d.peer_id.try_into()?,
-                directory_identifier: d.directory_identifier.try_into()?,
-                file_identifier: d.file_identifier.try_into()?,
-                date_modified: d.date_modified.try_into()?,
-            }),
-            tcp_message::Message::LeftDirectory(d) => Ok(super::TcpMessage::LeftDirectory {
-                directory_identifier: d.directory_identifier.try_into()?,
-                date_modified: d.date_modified.try_into()?,
-            }),
-            tcp_message::Message::ReceiveDirectories(d) => Ok(super::TcpMessage::ReceiveDirectories(map_directories(d.directories)?)),
-            tcp_message::Message::ReceiveFileEnd(f) => Ok(super::TcpMessage::ReceiveFileEnd { download_id: f.download_id.try_into()? }),
-            tcp_message::Message::ReceiveFilePart(f) => Ok(super::TcpMessage::ReceiveFilePart { download_id: f.download_id.try_into()?, data: f.data }),
-            tcp_message::Message::ReceivePeerId(p) => Ok(super::TcpMessage::ReceivePeerId(p.peer_id.try_into()?)),
-            tcp_message::Message::SharedDirectory(d) => Ok(super::TcpMessage::SharedDirectory(d.directory.try_into()?)),
-            tcp_message::Message::StartDownload(d) => Ok(super::TcpMessage::StartDownload { download_id: d.download_id.try_into()?, file_id: d.file_id.try_into()?, dir_id: d.dir_id.try_into()? })
+            tcp_message::Message::CancelDownload(cancel_download) => cancel_download.try_into(),
+            tcp_message::Message::DownloadError(err) => err.try_into(),
+            tcp_message::Message::DownloadedFile(d) => d.try_into(),
+            tcp_message::Message::LeftDirectory(d) => d.try_into(),
+            tcp_message::Message::ReceiveDirectories(d) => d.try_into(),
+            tcp_message::Message::ReceiveFileEnd(f) => f.try_into(),
+            tcp_message::Message::ReceiveFilePart(f) => f.try_into(),
+            tcp_message::Message::ReceivePeerId(p) => p.try_into(),
+            tcp_message::Message::SharedDirectory(d) => d.try_into(),
+            tcp_message::Message::StartDownload(d) => d.try_into(),
         }
     }
 }
@@ -248,5 +306,221 @@ impl TryFrom<protobuf_types::ShareDirectory> for ShareDirectory {
             signature: value.signature.try_into()?,
             shared_files,
         })
+    }
+}
+
+impl TryFrom<protobuf_types::AddedFiles> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::AddedFiles) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::AddedFiles {
+            directory: value.directory.try_into()?,
+            files: map_files(value.files)?,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::DeleteFile> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::DeleteFile) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::DeleteFile {
+            peer_id: value.peer_id.try_into()?,
+            directory: value.directory.try_into()?,
+            file: value.file_identifier.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::CancelDownload> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::CancelDownload) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::CancelDownload {
+            download_id: value.download_id.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::DownloadError> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::DownloadError) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::DownloadError {
+            error: protobuf_types::DownloadErrorType::from_i32(value.error)
+                .unwrap_or_default()
+                .into(),
+            download_id: value.download_id.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::DownloadedFile> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::DownloadedFile) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::DownloadedFile {
+            peer_id: value.peer_id.try_into()?,
+            directory_identifier: value.directory_identifier.try_into()?,
+            file_identifier: value.file_identifier.try_into()?,
+            date_modified: value.date_modified.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::LeftDirectory> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::LeftDirectory) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::LeftDirectory {
+            directory_identifier: value.directory_identifier.try_into()?,
+            date_modified: value.date_modified.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::ReceiveDirectories> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::ReceiveDirectories) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::ReceiveDirectories(map_directories(
+            value.directories,
+        )?))
+    }
+}
+
+impl TryFrom<protobuf_types::ReceiveFileEnd> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::ReceiveFileEnd) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::ReceiveFileEnd {
+            download_id: value.download_id.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::ReceiveFilePart> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::ReceiveFilePart) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::ReceiveFilePart {
+            download_id: value.download_id.try_into()?,
+            data: value.data,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::ReceivePeerId> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::ReceivePeerId) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::ReceivePeerId(value.peer_id.try_into()?))
+    }
+}
+
+impl TryFrom<protobuf_types::StartDownload> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::StartDownload) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::StartDownload {
+            download_id: value.download_id.try_into()?,
+            file_id: value.file_id.try_into()?,
+            dir_id: value.dir_id.try_into()?,
+        })
+    }
+}
+
+impl TryFrom<protobuf_types::SharedDirectory> for super::TcpMessage {
+    type Error = std::io::Error;
+
+    fn try_from(value: protobuf_types::SharedDirectory) -> Result<Self, Self::Error> {
+        Ok(super::TcpMessage::SharedDirectory(
+            value.directory.try_into()?,
+        ))
+    }
+}
+
+impl From<Uuid> for protobuf_types::Uuid {
+    fn from(value: Uuid) -> Self {
+        Self {
+            data: value.as_bytes().to_vec(),
+        }
+    }
+}
+
+impl From<DateTime<Utc>> for protobuf_types::DateTime {
+    fn from(value: DateTime<Utc>) -> Self {
+        Self {
+            date: value.to_string(),
+        }
+    }
+}
+
+impl From<PeerId> for protobuf_types::PeerId {
+    fn from(value: PeerId) -> Self {
+        Self {
+            uuid: value.uuid.into(),
+            hostname: value.hostname,
+        }
+    }
+}
+
+impl From<ContentLocation> for protobuf_types::ContentLocation {
+    fn from(_: ContentLocation) -> Self {
+        Self {
+            content_location: None,
+        }
+    }
+}
+
+impl From<SharedFile> for protobuf_types::SharedFile {
+    fn from(value: SharedFile) -> Self {
+        let mut owned_peers = vec![];
+
+        for p in value.owned_peers {
+            owned_peers.push(p.into());
+        }
+
+        Self {
+            name: value.name,
+            identifier: value.identifier.into(),
+            content_hash: value.content_hash,
+            last_modified: value.last_modified.into(),
+            content_location: value.content_location.into(),
+            owned_peers,
+            size: value.size,
+        }
+    }
+}
+
+impl From<ShareDirectorySignature> for protobuf_types::ShareDirectorySignature {
+    fn from(value: ShareDirectorySignature) -> Self {
+        let mut shared_peers = vec![];
+
+        for p in value.shared_peers {
+            shared_peers.push(p.into());
+        }
+
+        Self {
+            name: value.name,
+            identifier: value.identifier.into(),
+            last_modified: value.last_modified.into(),
+            shared_peers,
+        }
+    }
+}
+
+impl From<ShareDirectory> for protobuf_types::ShareDirectory {
+    fn from(value: ShareDirectory) -> Self {
+        let mut files = HashMap::new();
+
+        for (id, file) in value.shared_files {
+            files.insert(id.to_string(), file.into());
+        }
+
+        Self {
+            signature: value.signature.into(),
+            shared_files: files,
+        }
     }
 }
