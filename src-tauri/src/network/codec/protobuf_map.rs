@@ -65,7 +65,6 @@ fn map_directories_out(dirs: Vec<ShareDirectory>) -> Vec<protobuf_types::ShareDi
 impl From<super::TcpMessage> for protobuf_types::tcp_message::Message {
     fn from(value: super::TcpMessage) -> Self {
         match value {
-
             super::TcpMessage::AddedFiles { directory, files } => {
                 tcp_message::Message::AddedFiles(AddedFiles {
                     directory: directory.into(),
@@ -116,14 +115,47 @@ impl From<super::TcpMessage> for protobuf_types::tcp_message::Message {
                 date_modified: date_modified.into(),
             }),
 
-            super::TcpMessage::ReceiveDirectories(dirs) => tcp_message::Message::ReceiveDirectories(protobuf_types::ReceiveDirectories { directories: map_directories_out(dirs) }),
-            super::TcpMessage::ReceiveFileEnd { download_id } => tcp_message::Message::ReceiveFileEnd( protobuf_types::ReceiveFileEnd { download_id: download_id.into() }),
-            super::TcpMessage::ReceiveFilePart { download_id, data } => tcp_message::Message::ReceiveFilePart( protobuf_types::ReceiveFilePart { download_id: download_id.into(), data }),
-            super::TcpMessage::ReceivePeerId(id) => tcp_message::Message::ReceivePeerId( protobuf_types::ReceivePeerId { peer_id: id.into() }),
-            super::TcpMessage::RequestPeerId => tcp_message::Message::Signal(SignalType::RequestPeerId.into()),
-            super::TcpMessage::SharedDirectory(dir) => tcp_message::Message::SharedDirectory( protobuf_types::SharedDirectory { directory: dir.into() }),
-            super::TcpMessage::StartDownload { download_id, file_id, dir_id } => tcp_message::Message::StartDownload( protobuf_types::StartDownload { download_id: download_id.into(), file_id: file_id.into(), dir_id: dir_id.into() }),
-            super::TcpMessage::Synchronize => tcp_message::Message::Signal(SignalType::Synchronize.into()),
+            super::TcpMessage::ReceiveDirectories(dirs) => {
+                tcp_message::Message::ReceiveDirectories(protobuf_types::ReceiveDirectories {
+                    directories: map_directories_out(dirs),
+                })
+            }
+            super::TcpMessage::ReceiveFileEnd { download_id } => {
+                tcp_message::Message::ReceiveFileEnd(protobuf_types::ReceiveFileEnd {
+                    download_id: download_id.into(),
+                })
+            }
+            super::TcpMessage::ReceiveFilePart { download_id, data } => {
+                tcp_message::Message::ReceiveFilePart(protobuf_types::ReceiveFilePart {
+                    download_id: download_id.into(),
+                    data,
+                })
+            }
+            super::TcpMessage::ReceivePeerId(id) => {
+                tcp_message::Message::ReceivePeerId(protobuf_types::ReceivePeerId {
+                    peer_id: id.into(),
+                })
+            }
+            super::TcpMessage::RequestPeerId => {
+                tcp_message::Message::Signal(SignalType::RequestPeerId.into())
+            }
+            super::TcpMessage::SharedDirectory(dir) => {
+                tcp_message::Message::SharedDirectory(protobuf_types::SharedDirectory {
+                    directory: dir.into(),
+                })
+            }
+            super::TcpMessage::StartDownload {
+                download_id,
+                file_id,
+                dir_id,
+            } => tcp_message::Message::StartDownload(protobuf_types::StartDownload {
+                download_id: download_id.into(),
+                file_id: file_id.into(),
+                dir_id: dir_id.into(),
+            }),
+            super::TcpMessage::Synchronize => {
+                tcp_message::Message::Signal(SignalType::Synchronize.into())
+            }
         }
     }
 }

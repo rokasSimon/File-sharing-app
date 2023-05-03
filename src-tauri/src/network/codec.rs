@@ -1,13 +1,16 @@
 mod protobuf_map;
 
+use bytes::{Buf, BufMut, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message;
-use serde::{Serialize, Deserialize};
-use tokio_util::codec::{Encoder, Decoder};
-use bytes::{BytesMut, BufMut, Buf};
+use serde::{Deserialize, Serialize};
+use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;
 
-use crate::{peer_id::PeerId, data::{ShareDirectorySignature, ShareDirectory, SharedFile}};
+use crate::{
+    data::{ShareDirectory, ShareDirectorySignature, SharedFile},
+    peer_id::PeerId,
+};
 
 use self::protobuf_map::protobuf_types;
 
@@ -27,12 +30,12 @@ pub enum TcpMessage {
     DeleteFile {
         peer_id: PeerId,
         directory: ShareDirectorySignature,
-        file: Uuid
+        file: Uuid,
     },
 
     AddedFiles {
         directory: ShareDirectorySignature,
-        files: Vec<SharedFile>
+        files: Vec<SharedFile>,
     },
 
     DownloadedFile {
@@ -49,16 +52,16 @@ pub enum TcpMessage {
     },
 
     CancelDownload {
-        download_id: Uuid
+        download_id: Uuid,
     },
 
     ReceiveFilePart {
         download_id: Uuid,
-        data: Vec<u8>
+        data: Vec<u8>,
     },
 
     ReceiveFileEnd {
-        download_id: Uuid
+        download_id: Uuid,
     },
 
     DownloadError {
@@ -73,9 +76,7 @@ pub enum TcpMessage {
     },
 }
 
-pub struct MessageCodec {
-
-}
+pub struct MessageCodec {}
 
 impl Encoder<TcpMessage> for MessageCodec {
     type Error = std::io::Error;
@@ -83,11 +84,12 @@ impl Encoder<TcpMessage> for MessageCodec {
     fn encode(&mut self, item: TcpMessage, dst: &mut BytesMut) -> Result<(), Self::Error> {
         let encoded_message = match encode_protobuf(item) {
             Ok(msg) => msg,
-            Err(e) => return Err(e)
+            Err(e) => return Err(e),
         };
 
         let len = encoded_message.len();
-        let u32_len = u32::try_from(len).expect("large messages should have been handled by this point");
+        let u32_len =
+            u32::try_from(len).expect("large messages should have been handled by this point");
 
         dst.reserve(len + LENGTH_MARKER_SIZE);
         dst.put_u32(u32_len);
@@ -113,7 +115,10 @@ impl Decoder for MessageCodec {
         if length > MAX_MESSAGE_SIZE {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Message length {} is too large and should have been split into parts", length)
+                format!(
+                    "Message length {} is too large and should have been split into parts",
+                    length
+                ),
             ));
         }
 
@@ -162,8 +167,11 @@ pub fn decode_protobuf(data: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Err
 
 pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
     match &src {
-        TcpMessage::ReceiveFilePart { data: _, download_id: _ } => (),
-        _ => info!("Encoding {:?}", src)
+        TcpMessage::ReceiveFilePart {
+            data: _,
+            download_id: _,
+        } => (),
+        _ => info!("Encoding {:?}", src),
     }
 
     let msg = src.into();
@@ -176,8 +184,11 @@ pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
     if len > MAX_MESSAGE_SIZE {
         // split large messages into parts
         error!("Message too large to encode!");
-        
-        return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Message too large to encode")));
+
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Message too large to encode"),
+        ));
     }
 
     Ok(enc)

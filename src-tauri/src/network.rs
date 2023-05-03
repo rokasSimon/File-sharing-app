@@ -1,37 +1,33 @@
+mod client;
+mod codec;
 pub mod mdns;
 pub mod server;
-mod client;
 pub mod tcp_listener;
-mod codec;
 
-use std::net::{Ipv4Addr, IpAddr};
+use std::net::{IpAddr, Ipv4Addr};
 
-use if_addrs::IfAddr;
-use tokio::sync::mpsc;
-use tauri::async_runtime::Mutex;
 use anyhow::Result;
+use if_addrs::IfAddr;
+use tauri::async_runtime::Mutex;
+use tokio::sync::mpsc;
 
 use self::server::WindowRequest;
 
 pub type ClientConnectionId = IpAddr;
 
 pub struct NetworkThreadSender {
-    pub inner: Mutex<mpsc::Sender<WindowRequest>>
+    pub inner: Mutex<mpsc::Sender<WindowRequest>>,
 }
 
 #[tauri::command]
 pub async fn network_command(
     message: WindowRequest,
-    state: tauri::State<'_, NetworkThreadSender>
+    state: tauri::State<'_, NetworkThreadSender>,
 ) -> Result<(), String> {
-
     info!("{:?}", message);
 
     let sender = state.inner.lock().await;
-    sender
-        .send(message)
-        .await
-        .map_err(|e| e.to_string())
+    sender.send(message).await.map_err(|e| e.to_string())
 }
 
 pub fn get_ipv4_intf() -> Ipv4Addr {
@@ -51,7 +47,10 @@ pub fn get_ipv4_intf() -> Ipv4Addr {
         .map(|intf| intf.ip)
         .collect();
 
-    let intf = intf_addr.iter().next().expect("should have at least 1 ipv4 interface");
+    let intf = intf_addr
+        .iter()
+        .next()
+        .expect("should have at least 1 ipv4 interface");
 
     *intf
 }

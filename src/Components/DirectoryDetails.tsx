@@ -222,7 +222,7 @@ function DirectoryDetails({
   return (
     <React.Fragment>
       <Backdrop
-        sx={{ color: '#fff', zIndex: (theme: any) => theme.zIndex.drawer + 1 }}
+        sx={{ color: "#fff", zIndex: (theme: any) => theme.zIndex.drawer + 1 }}
         open={addingFiles}
       >
         <CircularProgress color="inherit" />

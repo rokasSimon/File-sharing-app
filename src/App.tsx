@@ -39,7 +39,10 @@ const initialSettings: Settings = {
   theme: "dark",
   downloadDirectory: "",
 };
-const SettingsContext = React.createContext({ updateSettings: (settings: Settings) => {}, settings: initialSettings });
+const SettingsContext = React.createContext({
+  updateSettings: (settings: Settings) => {},
+  settings: initialSettings,
+});
 const ThemeContext = React.createContext<ThemeContextValue>({
   toggleTheme: () => {},
   mode: "dark",
@@ -112,7 +115,7 @@ function App() {
     } else {
       appWindow.close();
     }
-  }
+  };
 
   const themeVal: ThemeContextValue = {
     toggleTheme: toggleTheme.toggleTheme,
@@ -122,10 +125,12 @@ function App() {
   return (
     <ThemeContext.Provider value={themeVal}>
       <ThemeProvider theme={theme}>
-        <SettingsContext.Provider value={{
-          settings: settings,
-          updateSettings: setSettings
-        }}>
+        <SettingsContext.Provider
+          value={{
+            settings: settings,
+            updateSettings: setSettings,
+          }}
+        >
           <ErrorContext.Provider value={lastError}>
             <ConnectedDevicesProvider>
               <ShareDirectoryProvider>

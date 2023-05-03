@@ -7,10 +7,10 @@ extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 
-mod config;
-mod data;
-mod network;
-mod peer_id;
+pub mod config;
+pub mod data;
+pub mod network;
+pub mod peer_id;
 mod window;
 
 use std::{
@@ -18,8 +18,9 @@ use std::{
     sync::Arc,
 };
 
-use tauri::{async_runtime::Mutex, Manager, SystemTrayMenu, CustomMenuItem, SystemTray};
+use tauri::{async_runtime::Mutex, CustomMenuItem, Manager, SystemTray, SystemTrayMenu};
 use tokio::sync::{mpsc, oneshot};
+use window::MainWindowManager;
 use window_shadows::set_shadow;
 
 use network::{
@@ -34,10 +35,11 @@ use network::{
 use crate::{
     config::{load_stored_data, save_config_loop, write_stored_data},
     network::server::WindowRequest,
-    window::{open_file, save_settings, get_settings},
+    window::{get_settings, open_file, save_settings},
 };
 
 const THREAD_CHANNEL_SIZE: usize = 64;
+const MAIN_WINDOW_LABEL: &str = "main";
 
 fn main() {
     pretty_env_logger::init();
@@ -75,24 +77,22 @@ fn main() {
     let settings_config = stored_data.clone();
     tauri::Builder::default()
         .on_system_tray_event(|app, event| match event {
-            tauri::SystemTrayEvent::MenuItemClick { id, .. } => {
-                match id.as_str() {
-                    "exit" => {
-                        let window = app.get_window("main");
+            tauri::SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
+                "exit" => {
+                    let window = app.get_window(MAIN_WINDOW_LABEL);
 
-                        if let Some(window) = window {
-                            let res = window.close();
+                    if let Some(window) = window {
+                        let res = window.close();
 
-                            if let Err(e) = res {
-                                error!("Could not close main window{}", e);
-                            }
+                        if let Err(e) = res {
+                            error!("Could not close main window{}", e);
                         }
-                    },
-                    _ => ()
+                    }
                 }
-            }
+                _ => (),
+            },
             tauri::SystemTrayEvent::LeftClick { .. } => {
-                let window = app.get_window("main");
+                let window = app.get_window(MAIN_WINDOW_LABEL);
 
                 if let Some(window) = window {
                     let result = window.show();
@@ -102,7 +102,7 @@ fn main() {
                     }
                 }
             }
-            _ => ()
+            _ => (),
         })
         .system_tray(system_tray)
         .manage(NetworkThreadSender {
@@ -128,9 +128,14 @@ fn main() {
             }
             _ => {}
         })
-        .invoke_handler(tauri::generate_handler![network_command, open_file, save_settings, get_settings])
+        .invoke_handler(tauri::generate_handler![
+            network_command,
+            open_file,
+            save_settings,
+            get_settings
+        ])
         .setup(move |app| {
-            let window = app.get_window("main").expect("To find main window");
+            let window = app.get_window(MAIN_WINDOW_LABEL).expect("To find main window");
 
             if let Err(e) = set_shadow(&window, true) {
                 warn!("Could not set shadows: {}", e)
@@ -150,8 +155,12 @@ fn main() {
             ));
 
             let app_handle = app.handle();
-            tauri::async_runtime::spawn(server_loop(
+            let window_manager = MainWindowManager {
                 app_handle,
+                window_label: MAIN_WINDOW_LABEL,
+            };
+            tauri::async_runtime::spawn(server_loop(
+                window_manager,
                 server_receiver,
                 network_receiver,
                 mdns_sender,

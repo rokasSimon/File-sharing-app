@@ -57,12 +57,21 @@ function Directories() {
   const [shareCreationOpen, setShareCreationOpen] = React.useState(false);
 
   React.useEffect(() => {
-    console.log("Updating directories from context" + JSON.stringify(shareDirectories));
+    console.log(
+      "Updating directories from context" + JSON.stringify(shareDirectories)
+    );
     if (selectedDirectory) {
-      const directory = shareDirectories.find((dir) => dir.signature.identifier === selectedDirectory.signature.identifier);
+      const directory = shareDirectories.find(
+        (dir) =>
+          dir.signature.identifier === selectedDirectory.signature.identifier
+      );
 
       if (directory) {
-        console.log(`Setting ${JSON.stringify(selectedDirectory)} to ${JSON.stringify(directory)}`);
+        console.log(
+          `Setting ${JSON.stringify(selectedDirectory)} to ${JSON.stringify(
+            directory
+          )}`
+        );
         setSelectedDirectory(directory);
       } else {
         setSelectedDirectory(null);
@@ -93,7 +102,7 @@ function Directories() {
           sharedBefore: matchedPeer != undefined,
           checked: matchedPeer != undefined,
         };
-  
+
         return result;
       });
 
@@ -275,8 +284,8 @@ function Directories() {
     if (selectedDirectory?.signature.identifier) {
       const request: LeaveDirectory = {
         leaveDirectory: {
-          directory_identifier: selectedDirectory.signature.identifier
-        }
+          directory_identifier: selectedDirectory.signature.identifier,
+        },
       };
 
       await invokeNetworkCommand(request);
@@ -346,9 +355,7 @@ function Directories() {
           onClose={handleDirectoryOptionsClose}
         >
           <MenuItem
-            onClick={() =>
-              handleLeaveOpen(optDirectory?.signature?.identifier)
-            }
+            onClick={() => handleLeaveOpen(optDirectory?.signature?.identifier)}
           >
             Leave
           </MenuItem>
@@ -423,7 +430,8 @@ function Directories() {
           <DialogTitle>Leave Directory</DialogTitle>
           <DialogContent>
             <DialogContentText>
-              Are you sure you want to leave directory {selectedDirectory?.signature.name}?
+              Are you sure you want to leave directory{" "}
+              {selectedDirectory?.signature.name}?
             </DialogContentText>
           </DialogContent>
           <DialogActions>

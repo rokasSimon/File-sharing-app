@@ -13,7 +13,7 @@ import { CancelDownload, invokeNetworkCommand } from "./networkCommands";
 import { PeerId } from "./ShareDirectoryContext";
 
 type Download = {
-  peer: PeerId,
+  peer: PeerId;
   downloadId: string;
   fileIdentifier: string;
   directoryIdentifier: string;
@@ -50,10 +50,7 @@ function DownloadsManager({ children }: any) {
         const input = event.payload;
         console.log(`Download started ${JSON.stringify(input)}`);
 
-        const updatedDownloads = [
-          input,
-          ...downloadsRef.current
-        ];
+        const updatedDownloads = [input, ...downloadsRef.current];
 
         setDownloads(updatedDownloads);
       });
@@ -72,16 +69,18 @@ function DownloadsManager({ children }: any) {
 
           if (alreadyDownloading.progress === 100) {
             setTimeout(() => {
-              const downloadsToKeep = downloadsRef.current.filter((download) => {
-                return download.downloadId !== alreadyDownloading?.downloadId;
-              });
-    
+              const downloadsToKeep = downloadsRef.current.filter(
+                (download) => {
+                  return download.downloadId !== alreadyDownloading?.downloadId;
+                }
+              );
+
               setDownloads(downloadsToKeep);
             }, 5000);
           }
         }
 
-        setDownloads([ ...downloadsRef.current ]);
+        setDownloads([...downloadsRef.current]);
       });
     };
 
@@ -97,7 +96,7 @@ function DownloadsManager({ children }: any) {
           alreadyDownloading.canceled = true;
         }
 
-        setDownloads([ ...downloadsRef.current ]);
+        setDownloads([...downloadsRef.current]);
 
         setTimeout(() => {
           const downloadsToKeep = downloadsRef.current.filter((download) => {
@@ -123,8 +122,8 @@ function DownloadsManager({ children }: any) {
       const request: CancelDownload = {
         cancelDownload: {
           peer: download.peer,
-          download_identifier: downloadId
-        }
+          download_identifier: downloadId,
+        },
       };
 
       await invokeNetworkCommand(request);
@@ -145,11 +144,18 @@ function DownloadsManager({ children }: any) {
       >
         <Box display={"flex"} justifyContent={"space-between"}>
           <Typography variant="caption">{download.fileName}</Typography>
-          <IconButton size="small" onClick={handleDownloadCancel(download.downloadId)}>
+          <IconButton
+            size="small"
+            onClick={handleDownloadCancel(download.downloadId)}
+          >
             <ClearIcon fontSize="small" />
           </IconButton>
         </Box>
-        <LinearProgress variant="determinate" value={download.progress} color={color} />
+        <LinearProgress
+          variant="determinate"
+          value={download.progress}
+          color={color}
+        />
       </Paper>
     );
   });

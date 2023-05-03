@@ -1,0 +1,42 @@
+Date : 2023-05-01 19:37:23
+Directory : e:\DEV\Rust\file-sharing-app
+Total : 9 files,  53 codes, -31 comments, -1 blanks, all 21 lines
+
+Languages
++----------------+------------+------------+------------+------------+------------+
+| language       | files      | code       | comment    | blank      | total      |
++----------------+------------+------------+------------+------------+------------+
+| Rust           |          8 |         52 |        -31 |         -1 |         20 |
+| TypeScript JSX |          1 |          1 |          0 |          0 |          1 |
++----------------+------------+------------+------------+------------+------------+
+
+Directories
++--------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                     | files      | code       | comment    | blank      | total      |
++--------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                        |          9 |         53 |        -31 |         -1 |         21 |
+| src                                                                      |          1 |          1 |          0 |          0 |          1 |
+| src-tauri                                                                |          8 |         52 |        -31 |         -1 |         20 |
+| src-tauri\src                                                            |          8 |         52 |        -31 |         -1 |         20 |
+| src-tauri\src (Files)                                                    |          1 |          1 |          0 |          1 |          2 |
+| src-tauri\src\network                                                    |          7 |         51 |        -31 |         -2 |         18 |
+| src-tauri\src\network (Files)                                            |          6 |        -20 |        -31 |        -14 |        -65 |
+| src-tauri\src\network\codec                                              |          1 |         71 |          0 |         12 |         83 |
+| src\pages                                                                |          1 |          1 |          0 |          0 |          1 |
++--------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++--------------------------------------------------------------------------+----------------+------------+------------+------------+------------+
+| filename                                                                 | language       | code       | comment    | blank      | total      |
++--------------------------------------------------------------------------+----------------+------------+------------+------------+------------+
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network.rs                    | Rust           |          1 |          0 |          1 |          2 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\client.rs             | Rust           |        792 |          0 |        159 |        951 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\client_handle.rs      | Rust           |       -802 |         -1 |       -163 |       -966 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec.rs              | Rust           |          0 |        -30 |         -8 |        -38 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec\protobuf_map.rs | Rust           |         71 |          0 |         12 |         83 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\mdns.rs               | Rust           |         -4 |          0 |         -1 |         -5 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server.rs             | Rust           |        862 |          0 |        155 |      1,017 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server_handle.rs      | Rust           |       -868 |          0 |       -156 |     -1,024 |
+| e:\DEV\Rust\file-sharing-app\src\pages\Directories.tsx                   | TypeScript JSX |          1 |          0 |          0 |          1 |
+| Total                                                                    |                |         53 |        -31 |         -1 |         21 |
++--------------------------------------------------------------------------+----------------+------------+------------+------------+------------+

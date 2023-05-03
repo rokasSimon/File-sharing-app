@@ -31,16 +31,17 @@ use crate::{
     config::StoredConfig,
     data::{ContentLocation, ShareDirectory, ShareDirectorySignature, SharedFile},
     peer_id::PeerId,
+    window::{WindowAction, WindowManager},
 };
 
 use super::{
     client::{client_loop, ClientData, DownloadError, MessageFromServer},
-    mdns::MessageToMdns, ClientConnectionId,
+    mdns::MessageToMdns,
+    ClientConnectionId,
 };
 
 const CHANNEL_SIZE: usize = 16;
 const UPDATE_PERIOD: u64 = 5;
-const MAIN_WINDOW_LABEL: &str = "main";
 
 #[derive(Clone)]
 pub struct ServerHandle {
@@ -125,14 +126,20 @@ pub enum MessageToServer {
     SharedDirectory(ShareDirectory),
 }
 
-struct ServerData<'a> {
-    window_manager: &'a AppHandle,
+struct ServerData<'a, M>
+where
+    M: WindowManager,
+{
+    window_manager: &'a M,
     server_handle: &'a ServerHandle,
     clients: &'a mut Mutex<HashMap<ClientConnectionId, ClientHandle>>,
     mdns_sender: &'a mpsc::Sender<MessageToMdns>,
 }
 
-impl ServerData<'_> {
+impl<M> ServerData<'_, M>
+where
+    M: WindowManager,
+{
     pub async fn broadcast(&self, peers: &Vec<PeerId>, msg: MessageFromServer) {
         let clients = self.clients.lock().await;
         let found_clients: Vec<_> = clients
@@ -180,26 +187,15 @@ pub enum WindowRequest {
     },
 }
 
-pub struct WindowAction;
-
-impl WindowAction {
-    pub const UPDATE_DIRECTORY: &str = "UpdateDirectory";
-    pub const UPDATE_SHARE_DIRECTORIES: &str = "UpdateShareDirectories";
-    pub const GET_PEERS: &str = "GetPeers";
-    pub const NEW_SHARE_DIRECTORY: &str = "NewShareDirectory";
-    pub const ERROR: &str = "Error";
-    pub const DOWNLOAD_STARTED: &str = "DownloadStarted";
-    pub const DOWNLOAD_UPDATE: &str = "DownloadUpdate";
-    pub const DOWNLOAD_CANCELED: &str = "DownloadCanceled";
-}
-
-pub async fn server_loop(
-    window_manager: AppHandle,
+pub async fn server_loop<M>(
+    window_manager: M,
     mut client_receiver: mpsc::Receiver<MessageToServer>,
     mut window_receiver: mpsc::Receiver<WindowRequest>,
     mdns_sender: mpsc::Sender<MessageToMdns>,
     server_handle: ServerHandle,
-) {
+) where
+    M: WindowManager,
+{
     let mut clients: Mutex<HashMap<ClientConnectionId, ClientHandle>> = Mutex::new(HashMap::new());
     let mut job_interval = tokio::time::interval(Duration::from_secs(UPDATE_PERIOD));
 
@@ -233,7 +229,7 @@ pub async fn server_loop(
     }
 }
 
-async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
+async fn do_periodic_work<'a, M>(server_data: ServerData<'a, M>) where M: WindowManager {
     let mut clients = server_data.clients.lock().await;
     let mut clients_to_remove = vec![];
 
@@ -266,7 +262,7 @@ async fn do_periodic_work<'a>(server_data: ServerData<'a>) {
     }
 }
 
-async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -> Result<()> {
+async fn handle_message<'a, M>(msg: MessageToServer, server_data: ServerData<'a, M>) -> Result<()> where M: WindowManager {
     match msg {
         MessageToServer::ServiceFound(service) => {
             let ip_addr = service.get_addresses().iter().next();
@@ -354,11 +350,14 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
                     client.id = Some(id.clone());
                     peer_ids.push(id);
 
-                    let _ = server_data.window_manager.emit_to(
-                        MAIN_WINDOW_LABEL,
-                        WindowAction::GET_PEERS,
-                        peer_ids,
-                    )?;
+                    let _ = server_data
+                        .window_manager
+                        .send(WindowAction::GetPeers, peer_ids);
+                    // let _ = server_data.window_manager.emit_to(
+                    //     MAIN_WINDOW_LABEL,
+                    //     WindowAction::GET_PEERS,
+                    //     peer_ids,
+                    // )?;
                     let _ = client.sender.send(MessageFromServer::Synchronize).await?;
 
                     Ok(())
@@ -385,11 +384,9 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
                         }
                     }
 
-                    let _ = server_data.window_manager.emit_to(
-                        MAIN_WINDOW_LABEL,
-                        WindowAction::GET_PEERS,
-                        peer_ids,
-                    )?;
+                    let _ = server_data
+                        .window_manager
+                        .send(WindowAction::GetPeers, peer_ids);
 
                     Ok(())
                 }
@@ -403,11 +400,9 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
             if !directories.contains_key(&directory.signature.identifier) {
                 directories.insert(directory.signature.identifier, directory.clone());
 
-                let _ = server_data.window_manager.emit_to(
-                    MAIN_WINDOW_LABEL,
-                    WindowAction::UPDATE_DIRECTORY,
-                    directory.clone(),
-                )?;
+                let _ = server_data
+                    .window_manager
+                    .send(WindowAction::UpdateDirectory, directory.clone());
 
                 return Ok(());
             }
@@ -477,14 +472,11 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
                         }
                     }
 
-                    let _ = server_data.window_manager.emit_to(
-                        MAIN_WINDOW_LABEL,
-                        WindowAction::UPDATE_SHARE_DIRECTORIES,
-                        owned_dirs
-                            .values()
-                            .cloned()
-                            .collect::<Vec<ShareDirectory>>(),
-                    )?;
+                    let _ = server_data.window_manager.send(WindowAction::UpdateShareDirectories, owned_dirs
+                        .values()
+                        .cloned()
+                        .collect::<Vec<ShareDirectory>>()
+                    );
 
                     Ok(())
                 }
@@ -497,22 +489,14 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
             let directory = directories.get(&directory_id);
 
             if let Some(dir) = directory {
-                let _ = server_data.window_manager.emit_to(
-                    MAIN_WINDOW_LABEL,
-                    WindowAction::UPDATE_DIRECTORY,
-                    dir,
-                )?;
+                let _ = server_data.window_manager.send(WindowAction::UpdateDirectory, dir);
             }
 
             Ok(())
         }
 
         MessageToServer::StartedDownload { download_info } => {
-            let _ = server_data.window_manager.emit_to(
-                MAIN_WINDOW_LABEL,
-                WindowAction::DOWNLOAD_STARTED,
-                download_info,
-            )?;
+            let _ = server_data.window_manager.send(WindowAction::DownloadStarted, download_info);
 
             Ok(())
         }
@@ -528,14 +512,10 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
 
             match directory {
                 None => {
-                    let _ = server_data.window_manager.emit_to(
-                        MAIN_WINDOW_LABEL,
-                        WindowAction::DOWNLOAD_CANCELED,
-                        DownloadCanceled {
-                            download_id,
-                            reason: "Could not update other clients.".to_owned(),
-                        },
-                    )?;
+                    let _ = server_data.window_manager.send(WindowAction::DownloadCanceled, DownloadCanceled {
+                        download_id,
+                        reason: "Could not update other clients.".to_owned(),
+                    });
 
                     Ok(())
                 }
@@ -552,20 +532,12 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
                         )
                         .await;
 
-                    let _ = server_data.window_manager.emit_to(
-                        MAIN_WINDOW_LABEL,
-                        WindowAction::UPDATE_DIRECTORY,
-                        directory.clone(),
-                    )?;
+                    let _ = server_data.window_manager.send(WindowAction::UpdateDirectory, directory.clone());
 
-                    let _ = server_data.window_manager.emit_to(
-                        MAIN_WINDOW_LABEL,
-                        WindowAction::DOWNLOAD_UPDATE,
-                        DownloadUpdate {
-                            download_id,
-                            progress: 100,
-                        },
-                    )?;
+                    let _ = server_data.window_manager.send(WindowAction::DownloadUpdate, DownloadUpdate {
+                        download_id,
+                        progress: 100,
+                    });
 
                     Ok(())
                 }
@@ -576,14 +548,10 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
             download_id,
             new_progress,
         } => {
-            let _ = server_data.window_manager.emit_to(
-                MAIN_WINDOW_LABEL,
-                WindowAction::DOWNLOAD_UPDATE,
-                DownloadUpdate {
-                    download_id,
-                    progress: new_progress,
-                },
-            )?;
+            let _ = server_data.window_manager.send(WindowAction::DownloadUpdate, DownloadUpdate {
+                download_id,
+                progress: new_progress,
+            });
 
             Ok(())
         }
@@ -592,21 +560,17 @@ async fn handle_message<'a>(msg: MessageToServer, server_data: ServerData<'a>) -
             download_id,
             cancel_reason,
         } => {
-            let _ = server_data.window_manager.emit_to(
-                MAIN_WINDOW_LABEL,
-                WindowAction::DOWNLOAD_CANCELED,
-                DownloadCanceled {
-                    download_id,
-                    reason: cancel_reason,
-                },
-            )?;
+            let _ = server_data.window_manager.send(WindowAction::DownloadCanceled, DownloadCanceled {
+                download_id,
+                reason: cancel_reason,
+            });
 
             Ok(())
         }
     }
 }
 
-async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> Result<()> {
+async fn handle_request<'a, M>(msg: WindowRequest, server_data: ServerData<'a, M>) -> Result<()> where M: WindowManager {
     match msg {
         WindowRequest::CreateShareDirectory(name) => {
             let mut data = server_data.server_handle.config.cached_data.lock().await;
@@ -624,11 +588,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             };
 
             data.insert(id, sd);
-            let _ = server_data.window_manager.emit_to(
-                MAIN_WINDOW_LABEL,
-                WindowAction::NEW_SHARE_DIRECTORY,
-                signature,
-            )?;
+            let _ = server_data.window_manager.send(WindowAction::NewShareDirectory, signature);
 
             Ok(())
         }
@@ -637,11 +597,8 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             let clients = server_data.clients.lock().await;
 
             let ids: Vec<PeerId> = clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
-            let _ = server_data.window_manager.emit_to(
-                MAIN_WINDOW_LABEL,
-                WindowAction::GET_PEERS,
-                ids,
-            )?;
+
+            let _ = server_data.window_manager.send(WindowAction::GetPeers, ids);
 
             Ok(())
         }
@@ -651,11 +608,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
 
             let values: Vec<ShareDirectory> = data.values().cloned().collect();
 
-            let _ = server_data.window_manager.emit_to(
-                MAIN_WINDOW_LABEL,
-                WindowAction::UPDATE_SHARE_DIRECTORIES,
-                values,
-            )?;
+            let _ = server_data.window_manager.send(WindowAction::UpdateShareDirectories, values);
 
             Ok(())
         }
@@ -667,14 +620,29 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
             let dir_id = Uuid::parse_str(&directory_identifier)?;
             let directory = directories.remove(&dir_id);
             let directory = match directory {
-                None => return Err(anyhow!("User is trying to leave directory that does not exist")),
+                None => {
+                    return Err(anyhow!(
+                        "User is trying to leave directory that does not exist"
+                    ))
+                }
                 Some(dir) => dir,
             };
 
-            server_data.broadcast(&directory.signature.shared_peers, MessageFromServer::LeftDirectory { directory_identifier: dir_id }).await;
+            server_data
+                .broadcast(
+                    &directory.signature.shared_peers,
+                    MessageFromServer::LeftDirectory {
+                        directory_identifier: dir_id,
+                    },
+                )
+                .await;
 
-            let directories_data = directories.values().cloned().collect::<Vec<ShareDirectory>>();
-            let _ = server_data.window_manager.emit_to(MAIN_WINDOW_LABEL, WindowAction::UPDATE_SHARE_DIRECTORIES, directories_data);
+            let directories_data = directories
+                .values()
+                .cloned()
+                .collect::<Vec<ShareDirectory>>();
+
+            let _ = server_data.window_manager.send(WindowAction::UpdateShareDirectories, directories_data);
 
             Ok(())
         }
@@ -693,32 +661,21 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                     let shared_file =
                         create_shared_file(file_path, &server_data.server_handle.peer_id).await?;
 
-                    for (_, file) in dir.shared_files.iter() {
-                        if file.content_hash == shared_file.content_hash {
-                            let _ = server_data.window_manager.emit_to(
-                                MAIN_WINDOW_LABEL,
-                                WindowAction::ERROR,
-                                BackendError {
-                                    title: "File Error".to_owned(),
-                                    error: "File has already been added to this directory"
-                                        .to_owned(),
-                                },
-                            )?;
-
-                            return Ok(());
-                        }
-                    }
-
                     shared_files.push(shared_file);
                 }
 
-                dir.add_files(shared_files.clone(), Utc::now());
+                let add_result = dir.add_files(shared_files.clone(), Utc::now());
 
-                let _ = server_data.window_manager.emit_to(
-                    MAIN_WINDOW_LABEL,
-                    WindowAction::UPDATE_DIRECTORY,
-                    dir.clone(),
-                )?;
+                if let Err(_) = add_result {
+                    let _ = server_data.window_manager.send(WindowAction::Error, BackendError {
+                        title: "File Error".to_owned(),
+                        error: "File has already been added to this directory".to_owned(),
+                    });
+
+                    return Ok(());
+                }
+
+                let _ = server_data.window_manager.send(WindowAction::UpdateDirectory, dir.clone());
 
                 server_data
                     .broadcast(
@@ -751,11 +708,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                     )
                     .await;
 
-                let _ = server_data.window_manager.emit_to(
-                    MAIN_WINDOW_LABEL,
-                    WindowAction::UPDATE_DIRECTORY,
-                    dir.clone(),
-                )?;
+                let _ = server_data.window_manager.send(WindowAction::UpdateDirectory, dir.clone());
 
                 return Ok(());
             }
@@ -785,7 +738,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                     }
 
                     file.content_location = ContentLocation::NetworkOnly;
-                    dir.delete_files(
+                    dir.remove_files(
                         &server_data.server_handle.peer_id,
                         Utc::now(),
                         vec![file_id.clone()],
@@ -802,11 +755,7 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                         )
                         .await;
 
-                    let _ = server_data.window_manager.emit_to(
-                        MAIN_WINDOW_LABEL,
-                        WindowAction::UPDATE_DIRECTORY,
-                        dir.clone(),
-                    )?;
+                    let _ = server_data.window_manager.send(WindowAction::UpdateDirectory, dir.clone());
                 }
             }
 
@@ -873,13 +822,10 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
 
             if let Err(e) = result {
                 error!("{}", e);
-                let _ = server_data.window_manager.emit_to(
-                    MAIN_WINDOW_LABEL,
-                    WindowAction::DOWNLOAD_CANCELED,
-                    DownloadNotStarted {
-                        reason: e.to_string(),
-                    },
-                )?;
+
+                let _ = server_data.window_manager.send(WindowAction::DownloadCanceled, DownloadNotStarted {
+                    reason: e.to_string(),
+                });
             }
 
             Ok(())
@@ -895,14 +841,13 @@ async fn handle_request<'a>(msg: WindowRequest, server_data: ServerData<'a>) -> 
                 .broadcast(&peers, MessageFromServer::CancelDownload { download_id })
                 .await;
 
-            let _ = server_data.window_manager.emit_to(
-                MAIN_WINDOW_LABEL,
-                WindowAction::DOWNLOAD_CANCELED,
+            let _ = server_data.window_manager.send(
+                WindowAction::DownloadCanceled,
                 DownloadCanceled {
                     download_id,
                     reason: DownloadError::Canceled.to_string(),
                 },
-            )?;
+            );
 
             Ok(())
         }
@@ -1012,5 +957,86 @@ fn get_file(
                 Some(file) => Some((directory, file)),
             }
         }
+    }
+}
+
+//#[cfg(tests)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use futures::{SinkExt, StreamExt};
+    use mdns_sd::ServiceInfo;
+    use tauri::AppHandle;
+    use tokio::{sync::mpsc, net::TcpListener, join};
+    use tokio_util::codec::{FramedWrite, FramedRead};
+    use uuid::Uuid;
+
+    use crate::{
+        config::{AppConfig, StoredConfig},
+        peer_id::PeerId, window::WindowManager, network::{mdns::MessageToMdns, codec::{MessageCodec, TcpMessage}},
+    };
+
+    use super::{server_loop, ServerHandle, WindowRequest, MessageToServer};
+
+    struct MockWindowManager;
+
+    impl WindowManager for MockWindowManager {
+        fn send<P>(&self, action: crate::window::WindowAction, payload: P) -> Result<(), tauri::Error> where P: serde::Serialize + Clone {
+            Ok(())
+        }
+    }
+
+    fn setup_config() -> Arc<StoredConfig> {
+        let config = StoredConfig::new(AppConfig::default(), HashMap::new());
+
+        Arc::new(config)
+    }
+
+    fn setup_server() -> (ServerHandle, mpsc::Receiver<MessageToMdns>, mpsc::Sender<WindowRequest>, tokio::task::JoinHandle<()>) {
+        let config = setup_config();
+        let (server_sender, server_receiver) = mpsc::channel(10);
+        let (window_sender, window_receiver) = mpsc::channel(10);
+        let (mdns_sender, mdns_receiver) = mpsc::channel(10);
+
+        let server = ServerHandle {
+            config: config.clone(),
+            channel: server_sender,
+            peer_id: PeerId {
+                hostname: "test 1".to_string(),
+                uuid: Uuid::nil(),
+            },
+        };
+
+        let server_loop_handle = tokio::spawn(server_loop(MockWindowManager{}, server_receiver, window_receiver, mdns_sender, server.clone()));
+
+        (server, mdns_receiver, window_sender, server_loop_handle)
+    }
+
+    #[tokio::test]
+    async fn message_to_server_handling() {
+        let (server, mdns_recv, window_send, handle) = setup_server();
+        let client_conn = TcpListener::bind("127.0.0.1:6000").await.unwrap();
+        let ip = "127.0.0.1";
+        let service = ServiceInfo::new("_test._tcp.local.", "test", "test_host", ip, 6001, Some(HashMap::from([
+            ("port".to_string(), "6000".to_string()),
+        ])));
+
+        let connect_task = server.channel.send(MessageToServer::ServiceFound(service.unwrap()));
+        let accept_task = client_conn.accept();
+
+        let (_, b) = join!(connect_task, accept_task);
+
+        let (mut stream, addr) = b.unwrap();
+        let (read, write) = stream.split();
+        let mut client_read = FramedRead::new(read, MessageCodec{});
+        let mut client_write = FramedWrite::new(write, MessageCodec{});
+
+        let _ = client_write.send(TcpMessage::RequestPeerId).await;
+        let res = client_read.next().await;
+
+        println!("{:?}", addr);
+        println!("{:?}", res);
+        
+        assert!(true);
     }
 }
