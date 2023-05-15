@@ -68,11 +68,21 @@ impl ShareDirectory {
         }
     }
 
+    pub fn add_peers(
+        &mut self,
+        new_peers: Vec<PeerId>,
+        date_modified: DateTime<Utc>
+    ) {
+        self.signature.last_modified = date_modified;
+        self.signature.shared_peers.extend(new_peers);
+    }
+
     pub fn add_owner(
         &mut self,
-        new_owner: PeerId,
+        new_owner: &PeerId,
         date_modified: DateTime<Utc>,
         file_ids: Vec<Uuid>,
+        mut location: Option<PathBuf>,
     ) {
         self.signature.last_modified = date_modified;
 
@@ -82,6 +92,10 @@ impl ShareDirectory {
             if let Some(file) = some_file {
                 if !file.owned_peers.contains(&new_owner) {
                     file.owned_peers.push(new_owner.clone());
+
+                    if let Some(new_location) = location.take() {
+                        file.content_location = ContentLocation::LocalPath(new_location);
+                    }
                 }
             }
         }
