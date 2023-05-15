@@ -7,36 +7,27 @@ extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 
-pub mod config;
+pub mod listen;
+pub mod mdns;
+pub mod window;
+pub mod server;
+pub mod client;
 pub mod data;
-pub mod network;
-pub mod peer_id;
-mod window;
+pub mod config;
 
 use std::{
     net::{SocketAddr, SocketAddrV4},
     sync::Arc,
 };
 
+use config::{load_stored_data, write_stored_data, save_config_loop};
+use listen::start_accept;
+use mdns::{MessageToMdns, start_mdns};
+use server::{ServerHandle, MessageToServer, server_loop};
 use tauri::{async_runtime::Mutex, CustomMenuItem, Manager, SystemTray, SystemTrayMenu};
 use tokio::sync::{mpsc, oneshot};
-use window::MainWindowManager;
+use window::{MainWindowManager, commands::{Window, network_command, save_settings, get_settings, open_file}, WindowResponse};
 use window_shadows::set_shadow;
-
-use network::{
-    get_ipv4_intf,
-    mdns::{start_mdns, MessageToMdns},
-    network_command,
-    server::{server_loop, MessageToServer, ServerHandle},
-    tcp_listener::start_accept,
-    NetworkThreadSender,
-};
-
-use crate::{
-    config::{load_stored_data, save_config_loop, write_stored_data},
-    network::server::WindowRequest,
-    window::{get_settings, open_file, save_settings},
-};
 
 const THREAD_CHANNEL_SIZE: usize = 64;
 const MAIN_WINDOW_LABEL: &str = "main";
@@ -53,14 +44,10 @@ fn main() {
         .expect("PeerID should be set on startup");
     let stored_data = Arc::new(conf);
 
-    let (network_sender, network_receiver) = mpsc::channel::<WindowRequest>(THREAD_CHANNEL_SIZE);
+    let (network_sender, network_receiver) = mpsc::channel::<WindowResponse>(THREAD_CHANNEL_SIZE);
     let (mdns_sender, mdns_receiver) = mpsc::channel::<MessageToMdns>(THREAD_CHANNEL_SIZE);
-
-    let (tcp_addr_sender, tcp_addr_receiver) = oneshot::channel::<SocketAddr>();
-    let intf_addr = get_ipv4_intf();
-    let soc_addr = SocketAddrV4::new(intf_addr, 0).into();
-
     let (server_sender, server_receiver) = mpsc::channel::<MessageToServer>(THREAD_CHANNEL_SIZE);
+
     let server_handle = ServerHandle {
         channel: server_sender,
         config: stored_data.clone(),
@@ -105,8 +92,8 @@ fn main() {
             _ => (),
         })
         .system_tray(system_tray)
-        .manage(NetworkThreadSender {
-            inner: Mutex::new(network_sender),
+        .manage(Window {
+            server: Mutex::new(network_sender),
         })
         .manage(settings_config)
         .on_window_event(move |event| match event.event() {
@@ -142,16 +129,13 @@ fn main() {
             }
 
             tauri::async_runtime::spawn(start_accept(
-                soc_addr,
-                tcp_addr_sender,
+                mdns_sender.clone(),
                 server_handle.clone(),
             ));
             tauri::async_runtime::spawn(start_mdns(
                 mdns_receiver,
-                tcp_addr_receiver,
                 server_handle.clone(),
                 id.clone(),
-                intf_addr,
             ));
 
             let app_handle = app.handle();

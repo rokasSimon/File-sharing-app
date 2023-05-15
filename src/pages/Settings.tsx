@@ -14,51 +14,10 @@ import { open } from "@tauri-apps/api/dialog";
 import React from "react";
 import { Settings, SettingsContext, ThemeContext } from "../App";
 
-// type Settings = {
-//   minimizeOnClose: boolean;
-//   theme: "light" | "dark";
-//   downloadDirectory: string;
-// };
 
 function SettingsPage() {
   const { mode, toggleTheme } = React.useContext(ThemeContext);
   const { settings, updateSettings } = React.useContext(SettingsContext);
-  //   const theme = React.useContext(ThemeContext);
-  //   const [settings, setSettings] = React.useState<Settings>({
-  //     theme: theme.mode,
-  //     downloadDirectory: "",
-  //     minimizeOnClose: false
-  //   });
-  //   const settingsRef = React.useRef(settings);
-  //   const loaded = React.useRef(false);
-
-  //   React.useEffect(() => {
-  //     settingsRef.current = settings;
-  //   }, [settings]);
-
-  //   React.useEffect(() => {
-  //     if (loaded.current) return;
-
-  //     const getSettings = async () => {
-  //       const loadedSettings = await invoke<Settings | string>("get_settings", {
-  //         message: "",
-  //       });
-
-  //       if (typeof loadedSettings == "string") {
-  //         console.error(loadedSettings);
-  //       } else {
-  //         if (loadedSettings.theme !== theme.mode) {
-  //             theme.toggleTheme();
-  //         }
-
-  //         setSettings(loadedSettings);
-  //       }
-  //     };
-
-  //     getSettings();
-
-  //     loaded.current = true;
-  //   }, []);
 
   const handleSave = async () => {
     const newSettings = {

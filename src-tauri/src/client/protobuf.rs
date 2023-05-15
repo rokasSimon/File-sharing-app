@@ -8,13 +8,11 @@ use chrono::{DateTime, Utc};
 use protobuf_types::tcp_message;
 use uuid::Uuid;
 
-use crate::{
-    data::{ContentLocation, ShareDirectory, ShareDirectorySignature, SharedFile},
-    network::client::DownloadError,
-    peer_id::PeerId,
-};
+use crate::data::*;
 
 use self::protobuf_types::{AddedFiles, CancelDownload, DeleteFile, SignalType};
+
+use super::DownloadError;
 
 fn map_files(files: Vec<protobuf_types::SharedFile>) -> Result<Vec<SharedFile>, std::io::Error> {
     let mut mapped = vec![];

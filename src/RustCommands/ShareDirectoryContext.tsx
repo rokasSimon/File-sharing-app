@@ -81,6 +81,7 @@ function ShareDirectoryProvider({ children }: any) {
       const _ = await listen<Array<SerialisedShareDirectory>>(
         "UpdateShareDirectories",
         (event) => {
+          console.log("sync orig " + JSON.stringify(event.payload));
           const input = event.payload;
           const dirs = input.map((dir) => {
             const fileMap = new Map<string, SharedFile>();

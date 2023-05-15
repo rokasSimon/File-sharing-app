@@ -15,50 +15,14 @@ use tokio::{
 use tokio_util::codec::{FramedRead, FramedWrite};
 use uuid::Uuid;
 
-use crate::{
-    data::{ContentLocation, ShareDirectory, ShareDirectorySignature, SharedFile},
-    network::{codec::TcpMessage, server::MessageToServer},
-    peer_id::PeerId,
-};
+mod codec;
+mod protobuf;
 
-use super::{
-    codec::MessageCodec,
-    server::{Download, ServerHandle},
-    ClientConnectionId,
-};
+use crate::{server::{ServerHandle, MessageFromServer, ClientConnectionId, MessageToServer}, data::{PeerId, ShareDirectory, ContentLocation}, window::Download};
+
+use self::codec::{MessageCodec, TcpMessage};
 
 const FILE_CHUNK_SIZE: usize = 1024 * 50; // 50 KB
-
-#[derive(Clone, Debug)]
-pub enum MessageFromServer {
-    GetPeerId,
-    Synchronize,
-
-    SendDirectories(Vec<ShareDirectory>),
-
-    AddedFiles(ShareDirectorySignature, Vec<SharedFile>),
-    DeleteFile(PeerId, ShareDirectorySignature, Uuid),
-
-    StartDownload {
-        download_id: Uuid,
-        file_identifier: Uuid,
-        directory_identifier: Uuid,
-        destination: PathBuf,
-    },
-    CancelDownload {
-        download_id: Uuid,
-    },
-    UpdateOwners {
-        peer_id: PeerId,
-        directory_identifier: Uuid,
-        file_identifier: Uuid,
-        date_modified: DateTime<Utc>,
-    },
-
-    LeftDirectory {
-        directory_identifier: Uuid,
-    },
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DownloadError {
@@ -125,8 +89,8 @@ struct ClientDataHandle<'a> {
     client_data: &'a mut ClientData,
     tcp_write: &'a mut FramedWrite<WriteHalf<'a>, MessageCodec>,
     client_peer_id: &'a mut Option<PeerId>,
-    downloads: &'a mut Mutex<HashMap<Uuid, DownloadHandle>>,
-    uploads: &'a mut Mutex<HashMap<Uuid, UploadHandle>>,
+    downloads: &'a mut HashMap<Uuid, DownloadHandle>,
+    uploads: &'a mut HashMap<Uuid, UploadHandle>,
     uploading: &'a mut bool,
 }
 
@@ -139,8 +103,8 @@ pub async fn client_loop(
 
     let mut framed_reader = FramedRead::new(read, MessageCodec {});
     let mut framed_writer = FramedWrite::new(write, MessageCodec {});
-    let mut downloads: Mutex<HashMap<Uuid, DownloadHandle>> = Mutex::new(HashMap::new());
-    let mut uploads: Mutex<HashMap<Uuid, UploadHandle>> = Mutex::new(HashMap::new());
+    let mut downloads: HashMap<Uuid, DownloadHandle> = HashMap::new();
+    let mut uploads: HashMap<Uuid, UploadHandle> = HashMap::new();
     let mut uploading = false;
 
     let mut handle = ClientDataHandle {
@@ -196,10 +160,8 @@ pub async fn client_loop(
 }
 
 async fn handle_uploads<'a>(client_data: &mut ClientDataHandle<'a>) -> Result<()> {
-    let mut uploads = client_data.uploads.lock().await;
-
     let mut uploads_to_remove: Vec<Uuid> = vec![];
-    for (download_id, upload) in uploads.iter_mut() {
+    for (download_id, upload) in client_data.uploads.iter_mut() {
         let mut directories = client_data
             .client_data
             .server
@@ -237,10 +199,10 @@ async fn handle_uploads<'a>(client_data: &mut ClientDataHandle<'a>) -> Result<()
 
     for download_id in uploads_to_remove {
         info!("Removing download {}", download_id);
-        uploads.remove(&download_id);
+        client_data.uploads.remove(&download_id);
     }
 
-    if uploads.len() == 0 {
+    if client_data.uploads.len() == 0 {
         *client_data.uploading = false;
     }
 
@@ -510,8 +472,7 @@ async fn handle_tcp_message<'a>(
                     }
                 },
                 Ok(handle) => {
-                    let mut uploads = data.uploads.lock().await;
-                    uploads.insert(download_id, handle);
+                    data.uploads.insert(download_id, handle);
 
                     *data.uploading = true;
                     info!("Successfully added upload handle");
@@ -523,8 +484,7 @@ async fn handle_tcp_message<'a>(
 
         TcpMessage::CancelDownload { download_id } => {
             info!("Trying to cancel download {}", download_id);
-            let mut uploads = data.uploads.lock().await;
-            let upload = uploads.get_mut(&download_id);
+            let upload = data.uploads.get_mut(&download_id);
 
             if let Some(upload) = upload {
                 upload.canceled = true;
@@ -537,8 +497,7 @@ async fn handle_tcp_message<'a>(
             download_id,
             data: raw_data,
         } => {
-            let mut downloads = data.downloads.lock().await;
-            let download = downloads.get_mut(&download_id);
+            let download = data.downloads.get_mut(&download_id);
 
             let result = match download {
                 None => {
@@ -586,7 +545,7 @@ async fn handle_tcp_message<'a>(
             };
 
             if let Err(e) = result {
-                downloads.remove(&download_id);
+                data.downloads.remove(&download_id);
                 let _ = data
                     .client_data
                     .server
@@ -603,8 +562,7 @@ async fn handle_tcp_message<'a>(
 
         TcpMessage::DownloadError { error, download_id } => {
             error!("Download error: {:?}", error);
-            let mut downloads = data.downloads.lock().await;
-            let download = downloads.remove(&download_id);
+            let download = data.downloads.remove(&download_id);
 
             match download {
                 None => Ok(()),
@@ -627,15 +585,14 @@ async fn handle_tcp_message<'a>(
         }
 
         TcpMessage::ReceiveFileEnd { download_id } => {
-            let mut downloads = data.downloads.lock().await;
-            if !downloads.contains_key(&download_id) {
+            if !data.downloads.contains_key(&download_id) {
                 error!("Received file end for unknown download");
 
                 return Ok(());
             }
 
             let mut directories = data.client_data.server.config.cached_data.lock().await;
-            let mut download = downloads.remove(&download_id).unwrap();
+            let mut download = data.downloads.remove(&download_id).unwrap();
             let directory = directories.get_mut(&download.dir_id);
 
             let result = match directory {
@@ -815,9 +772,7 @@ async fn handle_server_messages(
                                 match file_handle {
                                     Err(_) => Err(DownloadError::WriteError),
                                     Ok(file_handle) => {
-                                        let mut downloads = data.downloads.lock().await;
-
-                                        downloads.insert(
+                                        data.downloads.insert(
                                             download_id,
                                             DownloadHandle {
                                                 canceled: false,
@@ -925,18 +880,18 @@ async fn disconnect_self(client_data_handle: &mut ClientDataHandle<'_>) {
         .await;
 
     {
-        let mut downloads = client_data_handle.downloads.lock().await;
-        for (_, download) in downloads.iter_mut() {
+        for (id, download) in client_data_handle.downloads.iter_mut() {
             download.canceled = true;
             if let Ok(_) = download.output_file.shutdown().await {
                 let _ = fs::remove_file(download.output_path.clone()).await;
             }
+
+            let _ = client_data_handle.client_data.server.channel.send(MessageToServer::CanceledDownload { download_id: *id, cancel_reason: "Client was disconnected".to_string() });
         }
     }
 
     {
-        let mut uploads = client_data_handle.uploads.lock().await;
-        for (_, upload) in uploads.iter_mut() {
+        for (_, upload) in client_data_handle.uploads.iter_mut() {
             upload.canceled = true;
         }
     }

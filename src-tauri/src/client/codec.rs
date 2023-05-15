@@ -1,5 +1,3 @@
-mod protobuf_map;
-
 use bytes::{Buf, BufMut, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message;
@@ -8,13 +6,11 @@ use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;
 
 use crate::{
-    data::{ShareDirectory, ShareDirectorySignature, SharedFile},
-    peer_id::PeerId,
+    data::{ShareDirectory, ShareDirectorySignature, SharedFile, PeerId}
 };
 
-use self::protobuf_map::protobuf_types;
+use super::{DownloadError, protobuf::protobuf_types};
 
-use super::client::DownloadError;
 
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 100; // 100 MB
 const LENGTH_MARKER_SIZE: usize = 4;

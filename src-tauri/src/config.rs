@@ -11,13 +11,12 @@ use std::{
 use tauri::async_runtime::Mutex;
 use uuid::Uuid;
 
-use crate::{data::ShareDirectory, peer_id::PeerId};
+use crate::data::{PeerId, ShareDirectory};
 
 const APP_FILES_LOCATION: &str = "fileshare";
 const APP_CONFIG_LOCATION: &str = "config.json";
 const APP_CACHE_LOCATION: &str = "cached_files.json";
 const DEFAULT_DOWNLOAD_LOCATION: &str = "downloads";
-
 const SAVE_INTERVAL_SECS: u64 = 300;
 
 pub fn load_stored_data() -> StoredConfig {
