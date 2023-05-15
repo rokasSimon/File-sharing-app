@@ -1,17 +1,17 @@
 .navbar-left {
-    display: flex;
-    flex-direction: row;
-    margin-left: 0.1em;
+  display: flex;
+  flex-direction: row;
+  margin-left: 0.1em;
 }
 
 .menu-button {
-    margin: var(--top-margin) 0 0.25em 0.25em;
-    border: none;
-    background-color: inherit;
-    border-radius: 5px;
-    color: var(--light-text);
+  margin: var(--top-margin) 0 0.25em 0.25em;
+  border: none;
+  background-color: inherit;
+  border-radius: 5px;
+  color: var(--light-text);
 }
 
 .menu-button:hover {
-    background-color: var(--light-text-hover);
+  background-color: var(--light-text-hover);
 }

@@ -55,5 +55,5 @@ function ConnectedDevicesProvider({ children }: any) {
   );
 }
 
-export type {GetPeers};
+export type { GetPeers };
 export { ConnectedDevicesProvider, ConnectedDevicesContext };

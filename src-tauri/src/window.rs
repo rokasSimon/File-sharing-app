@@ -1,81 +1,151 @@
-use std::{path::PathBuf, sync::Arc, str::FromStr};
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
+use uuid::Uuid;
 
-use crate::config::StoredConfig;
+use crate::data::{PeerId, ShareDirectory, ShareDirectorySignature};
 
-#[derive(Deserialize, Debug)]
-pub struct OpenFile {
-    pub file_path: PathBuf
+pub mod commands;
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Download {
+    pub peer: PeerId,
+    pub download_id: Uuid,
+    pub file_identifier: Uuid,
+    pub directory_identifier: Uuid,
+    pub progress: u64,
+    pub file_name: String,
+    pub file_path: PathBuf,
 }
 
-#[tauri::command]
-pub async fn open_file(
-    message: OpenFile,
-) -> Result<(), String> {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadUpdate {
+    pub progress: u64,
+    pub download_id: Uuid,
+}
 
-    info!("{:?}", message);
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadCanceled {
+    pub reason: String,
+    pub download_id: Uuid,
+}
 
-    let result = opener::open(&message.file_path);
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadNotStarted {
+    pub reason: String,
+}
 
-    if let Err(e) = result {
-        return Err(format!("Could not open file {}: {}", message.file_path.display(), e));
-    }
-
-    Ok(())
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BackendError {
+    pub error: String,
+    pub title: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct Settings {
-    minimize_on_close: bool,
-    theme: String,
-    download_directory: String,
+pub enum WindowResponse {
+    CreateShareDirectory(String),
+    GetAllShareDirectoryData(bool),
+    GetPeers(bool),
+    AddFiles {
+        directory_identifier: String,
+        file_paths: Vec<String>,
+    },
+    ShareDirectoryToPeers {
+        directory_identifier: String,
+        peers: Vec<PeerId>,
+    },
+    DownloadFile {
+        directory_identifier: String,
+        file_identifier: String,
+    },
+    DeleteFile {
+        directory_identifier: String,
+        file_identifier: String,
+    },
+    CancelDownload {
+        peer: PeerId,
+        download_identifier: String,
+    },
+    LeaveDirectory {
+        directory_identifier: String,
+    },
 }
 
-#[tauri::command]
-pub async fn get_settings(
-    message: String,
-    state: tauri::State<'_, Arc<StoredConfig>>
-) -> Result<Settings, String> {
-    
-    let config = state.app_config.lock().await;
+#[derive(Serialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum WindowRequest {
+    UpdateDirectory(ShareDirectory),
+    UpdateShareDirectories(Vec<ShareDirectory>),
+    GetPeers(Vec<PeerId>),
+    NewShareDirectory(ShareDirectorySignature),
+    Error(BackendError),
+    DownloadStarted(Download),
+    DownloadUpdate(DownloadUpdate),
+    DownloadCanceled(DownloadCanceled),
+}
 
-    let download_dir = match config.download_directory.to_str() {
-        None => return Err("Could not load settings because download directory is invalid".to_string()),
-        Some(dir) => dir.to_string()
-    };
+// impl Serialize for WindowRequest {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer {
+//             match self {
+//                 Self::UpdateDirectory(dir) => serializer.serialize_newtype_variant(name, variant_index, variant, value) //serde_json::to_string(dir).unwrap(),
+//                 Self::UpdateShareDirectories(dirs) => serde_json::to_string(dirs).unwrap(),
+//                 Self::GetPeers(peers) => serde_json::to_string(peers).unwrap(),
+//                 Self::NewShareDirectory(new_dir) => serde_json::to_string(new_dir).unwrap(),
+//                 Self::Error(err) => serde_json::to_string(err).unwrap(),
+//                 Self::DownloadStarted(download) => serde_json::to_string(download).unwrap(),
+//                 Self::DownloadUpdate(update) => serde_json::to_string(update).unwrap(),
+//                 Self::DownloadCanceled(cancel) => serde_json::to_string(cancel).unwrap(),
+//             }
+//     }
+// }
 
-    Ok(Settings {
-        download_directory: download_dir,
-        theme: config.theme.clone(),
-        minimize_on_close: config.hide_on_close,
-    })
-} 
-
-#[tauri::command]
-pub async fn save_settings(
-    message: Settings,
-    state: tauri::State<'_, Arc<StoredConfig>>
-) -> Result<(), String> {
-    info!("Received new settings {:#?}", message);
-    
-    let mut config = state.app_config.lock().await;
-
-    config.hide_on_close = message.minimize_on_close;
-    config.theme = message.theme;
-    
-    let path = match PathBuf::from_str(&message.download_directory) {
-        Err(e) => return Err(e.to_string()),
-        Ok(path) => {
-            if path.is_dir() {
-                path
-            } else {
-                return Err("Path is not for a directory".to_string());
-            }
+impl WindowRequest {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            Self::UpdateDirectory(_) => "UpdateDirectory",
+            Self::UpdateShareDirectories(_) => "UpdateShareDirectories",
+            Self::GetPeers(_) => "GetPeers",
+            Self::NewShareDirectory(_) => "NewShareDirectory",
+            Self::Error(_) => "Error",
+            Self::DownloadStarted(_) => "DownloadStarted",
+            Self::DownloadUpdate(_) => "DownloadUpdate",
+            Self::DownloadCanceled(_) => "DownloadCanceled",
         }
-    };
+    }
 
-    config.download_directory = path;
+    // pub fn get_payload(&self) -> Box<dyn Serialize> {
+    //     match self {
+    //         Self::UpdateDirectory(dir) => serde_json::to_string(dir).unwrap(),
+    //         Self::UpdateShareDirectories(dirs) => serde_json::to_string(dirs).unwrap(),
+    //         Self::GetPeers(peers) => serde_json::to_string(peers).unwrap(),
+    //         Self::NewShareDirectory(new_dir) => serde_json::to_string(new_dir).unwrap(),
+    //         Self::Error(err) => serde_json::to_string(err).unwrap(),
+    //         Self::DownloadStarted(download) => serde_json::to_string(download).unwrap(),
+    //         Self::DownloadUpdate(update) => serde_json::to_string(update).unwrap(),
+    //         Self::DownloadCanceled(cancel) => serde_json::to_string(cancel).unwrap(),
+    //     }
+    // }
+}
 
-    Ok(())
-} 
+pub trait WindowManager {
+    fn send(&self, action: WindowRequest) -> Result<(), tauri::Error>;
+}
+
+pub struct MainWindowManager {
+    pub window_label: &'static str,
+    pub app_handle: AppHandle
+}
+
+impl WindowManager for MainWindowManager {
+    fn send(&self, action: WindowRequest) -> Result<(), tauri::Error> {
+        self.app_handle.emit_to(self.window_label, action.to_string(), action)
+    }
+}

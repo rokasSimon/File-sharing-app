@@ -1,34 +1,34 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-import { App } from './App';
-import reportWebVitals from './reportWebVitals';
+import React from "react";
+import ReactDOM from "react-dom/client";
+import "./index.css";
+import { App } from "./App";
+import reportWebVitals from "./reportWebVitals";
 
 import { createHashRouter, RouterProvider } from "react-router-dom";
 
-import '@fontsource/roboto/500.css';
-import Directories from './pages/Directories';
-import SettingsPage from './pages/Settings';
+import "@fontsource/roboto/500.css";
+import Directories from "./pages/Directories";
+import SettingsPage from "./pages/Settings";
 
 const root = ReactDOM.createRoot(
-  document.getElementById('root') as HTMLElement
+  document.getElementById("root") as HTMLElement
 );
 
 const router = createHashRouter([
   {
-    path: '/',
+    path: "/",
     element: <App />,
     children: [
       {
-        path: '/settings',
-        element: <SettingsPage />
+        path: "/settings",
+        element: <SettingsPage />,
       },
       {
-        path: '/directories',
-        element: <Directories />
-      }
-    ]
-  }
+        path: "/directories",
+        element: <Directories />,
+      },
+    ],
+  },
 ]);
 
 root.render(

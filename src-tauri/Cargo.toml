@@ -28,7 +28,7 @@ platform-dirs = "0.3.0"
 tokio = { version = "1.26.0", features = ["full"] }
 tokio-util = { version = "0.7.7", features = ["full"] }
 thiserror = "1.0.40"
-mdns-sd = "0.5.10"
+mdns-sd = "0.7.3"
 hostname = "0.3.1"
 futures = "0.3.28"
 anyhow = "1.0.70"
@@ -39,6 +39,7 @@ if-addrs = "0.10.1"
 opener = "0.6.1"
 prost = "0.11"
 prost-types = "0.11"
+async-trait = "0.1.68"
 
 [features]
 # by default Tauri runs in production mode

@@ -1,19 +1,22 @@
 use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use std::{
+    collections::HashMap,
     fs::{self, File, OpenOptions},
-    path::{Path, PathBuf}, io::Write, collections::HashMap, time::Duration, sync::Arc,
+    io::Write,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
 };
 use tauri::async_runtime::Mutex;
+use uuid::Uuid;
 
-use crate::{data::ShareDirectory, peer_id::PeerId};
+use crate::data::{PeerId, ShareDirectory};
 
 const APP_FILES_LOCATION: &str = "fileshare";
 const APP_CONFIG_LOCATION: &str = "config.json";
 const APP_CACHE_LOCATION: &str = "cached_files.json";
 const DEFAULT_DOWNLOAD_LOCATION: &str = "downloads";
-
 const SAVE_INTERVAL_SECS: u64 = 300;
 
 pub fn load_stored_data() -> StoredConfig {
@@ -34,7 +37,8 @@ pub fn load_stored_data() -> StoredConfig {
         let default_download_path = app_dir.data_dir.join(DEFAULT_DOWNLOAD_LOCATION);
 
         if !default_download_path.exists() {
-            fs::create_dir(default_download_path.clone()).expect("should be able to create default download directory");
+            fs::create_dir(default_download_path.clone())
+                .expect("should be able to create default download directory");
         }
 
         config.download_directory = default_download_path;

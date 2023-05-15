@@ -27,9 +27,11 @@ type SharedFile = {
   identifier: string;
   contentHash: number;
   lastModified: string;
-  contentLocation: {
-    localPath: string;
-  } | undefined;
+  contentLocation:
+    | {
+        localPath: string;
+      }
+    | undefined;
   ownedPeers: Array<PeerId>;
   size: number;
 };
@@ -79,6 +81,7 @@ function ShareDirectoryProvider({ children }: any) {
       const _ = await listen<Array<SerialisedShareDirectory>>(
         "UpdateShareDirectories",
         (event) => {
+          console.log("sync orig " + JSON.stringify(event.payload));
           const input = event.payload;
           const dirs = input.map((dir) => {
             const fileMap = new Map<string, SharedFile>();
@@ -103,42 +106,47 @@ function ShareDirectoryProvider({ children }: any) {
     };
 
     const startListenUpdateDirectory = async () => {
-      const _ = await listen<SerialisedShareDirectory>("UpdateDirectory", (event) => {
-        const input = event.payload;
-        const fileMap = new Map<string, SharedFile>();
+      const _ = await listen<SerialisedShareDirectory>(
+        "UpdateDirectory",
+        (event) => {
+          const input = event.payload;
+          const fileMap = new Map<string, SharedFile>();
 
-        Object.keys(input.shared_files).forEach((key) => {
-          if (validateUuid(key)) {
-            fileMap.set(key, (input.shared_files[key]) as SharedFile);
+          Object.keys(input.shared_files).forEach((key) => {
+            if (validateUuid(key)) {
+              fileMap.set(key, input.shared_files[key] as SharedFile);
+            }
+          });
+
+          const newDirectory: ShareDirectory = {
+            signature: input.signature,
+            shared_files: fileMap,
+          };
+          let updatedDirectories = [newDirectory];
+
+          for (const directory of directoriesRef.current) {
+            if (directory.signature.identifier !== input.signature.identifier) {
+              updatedDirectories.push(directory);
+            }
           }
-        });
 
-        const newDirectory: ShareDirectory = {
-          signature: input.signature,
-          shared_files: fileMap
-        };
-        let updatedDirectories = [ newDirectory ];
+          const sortedDirectories = updatedDirectories.sort((a, b) => {
+            if (a.signature.identifier < b.signature.identifier) {
+              return -1;
+            } else if (a.signature.identifier > b.signature.identifier) {
+              return 1;
+            }
 
-        for (const directory of directoriesRef.current) {
-          if (directory.signature.identifier !== input.signature.identifier) {
-            updatedDirectories.push(directory);
-          }
+            return 0;
+          });
+
+          console.log(
+            `Updated directories to ${JSON.stringify(sortedDirectories)}`
+          );
+
+          setDirectories(sortedDirectories);
         }
-
-        const sortedDirectories = updatedDirectories.sort((a, b) => {
-          if (a.signature.identifier < b.signature.identifier) {
-            return -1;
-          } else if (a.signature.identifier > b.signature.identifier) {
-            return 1;
-          }
-
-          return 0;
-        });
-
-        console.log(`Updated directories to ${JSON.stringify(sortedDirectories)}`);
-
-        setDirectories(sortedDirectories);
-      });
+      );
     };
 
     const loadDirectories = async () => {

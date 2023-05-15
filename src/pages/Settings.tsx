@@ -14,58 +14,17 @@ import { open } from "@tauri-apps/api/dialog";
 import React from "react";
 import { Settings, SettingsContext, ThemeContext } from "../App";
 
-// type Settings = {
-//   minimizeOnClose: boolean;
-//   theme: "light" | "dark";
-//   downloadDirectory: string;
-// };
 
 function SettingsPage() {
-    const { mode, toggleTheme } = React.useContext(ThemeContext);
-    const { settings, updateSettings } = React.useContext(SettingsContext);
-//   const theme = React.useContext(ThemeContext);
-//   const [settings, setSettings] = React.useState<Settings>({
-//     theme: theme.mode,
-//     downloadDirectory: "",
-//     minimizeOnClose: false
-//   });
-//   const settingsRef = React.useRef(settings);
-//   const loaded = React.useRef(false);
-
-//   React.useEffect(() => {
-//     settingsRef.current = settings;
-//   }, [settings]);
-
-//   React.useEffect(() => {
-//     if (loaded.current) return;
-
-//     const getSettings = async () => {
-//       const loadedSettings = await invoke<Settings | string>("get_settings", {
-//         message: "",
-//       });
-
-//       if (typeof loadedSettings == "string") {
-//         console.error(loadedSettings);
-//       } else {
-//         if (loadedSettings.theme !== theme.mode) {
-//             theme.toggleTheme();
-//         }
-
-//         setSettings(loadedSettings);
-//       }
-//     };
-
-//     getSettings();
-
-//     loaded.current = true;
-//   }, []);
+  const { mode, toggleTheme } = React.useContext(ThemeContext);
+  const { settings, updateSettings } = React.useContext(SettingsContext);
 
   const handleSave = async () => {
     const newSettings = {
-        ...settings,
-        theme: mode
+      ...settings,
+      theme: mode,
     };
-    
+
     updateSettings(newSettings);
 
     await invoke("save_settings", { message: newSettings });
@@ -78,13 +37,13 @@ function SettingsPage() {
     });
 
     if (typeof selected == "string") {
-        const newSettings: Settings = {
-          ...settings,
-          downloadDirectory: selected,
-        };
+      const newSettings: Settings = {
+        ...settings,
+        downloadDirectory: selected,
+      };
 
-        updateSettings(newSettings);
-      }
+      updateSettings(newSettings);
+    }
   };
 
   const handleShowCurrentDirectory = async () => {
@@ -101,8 +60,8 @@ function SettingsPage() {
     const newMinimizeOption = !settings.minimizeOnClose;
 
     const newSettings: Settings = {
-        ...settings,
-        minimizeOnClose: newMinimizeOption
+      ...settings,
+      minimizeOnClose: newMinimizeOption,
     };
 
     updateSettings(newSettings);
@@ -125,7 +84,10 @@ function SettingsPage() {
               <Stack spacing={1}>
                 <FormGroup>
                   <Typography>Minimize On Close</Typography>
-                  <Switch checked={settings.minimizeOnClose} onChange={handleChangeMinimize} />
+                  <Switch
+                    checked={settings.minimizeOnClose}
+                    onChange={handleChangeMinimize}
+                  />
                 </FormGroup>
                 <FormGroup>
                   <Typography>Theme</Typography>
@@ -138,10 +100,18 @@ function SettingsPage() {
               <Stack>
                 <FormGroup>
                   <Typography>Save Directory</Typography>
-                  <Button variant="contained" style={{ margin: '0.5em 0em' }} onClick={handleShowCurrentDirectory}>
+                  <Button
+                    variant="contained"
+                    style={{ margin: "0.5em 0em" }}
+                    onClick={handleShowCurrentDirectory}
+                  >
                     Show Folder
                   </Button>
-                  <Button variant="contained" style={{ margin: '0.5em 0em' }} onClick={handleSaveDirectoryChange}>
+                  <Button
+                    variant="contained"
+                    style={{ margin: "0.5em 0em" }}
+                    onClick={handleSaveDirectoryChange}
+                  >
                     Set Directory
                   </Button>
                 </FormGroup>
