@@ -1,10 +1,13 @@
-use std::{net::{Ipv4Addr}, time::Duration};
+use std::{net::Ipv4Addr, time::Duration};
 
 use anyhow::Result;
 use if_addrs::IfAddr;
-use tokio::{net::TcpListener, sync::{mpsc}};
+use tokio::{net::TcpListener, sync::mpsc};
 
-use crate::{server::{MessageToServer, ServerHandle}, mdns::MessageToMdns};
+use crate::{
+    mdns::MessageToMdns,
+    server::{MessageToServer, ServerHandle},
+};
 
 pub async fn start_accept(
     send_addr: mpsc::Sender<MessageToMdns>,
@@ -21,15 +24,17 @@ pub async fn start_accept(
                 if let Ok(socket_addr) = socket_addr {
                     let ipv4_addr = match socket_addr {
                         std::net::SocketAddr::V4(v4) => v4,
-                        std::net::SocketAddr::V6(_) => panic!("Should not be able to get V6 here")
+                        std::net::SocketAddr::V6(_) => panic!("Should not be able to get V6 here"),
                     };
 
-                    let send_res = send_addr.send(MessageToMdns::SwitchedNetwork(ipv4_addr)).await;
+                    let send_res = send_addr
+                        .send(MessageToMdns::SwitchedNetwork(ipv4_addr))
+                        .await;
 
                     if let Ok(()) = send_res {
                         while let Ok((tcp, ip)) = tcp_listener.accept().await {
                             info!("Accepted connection from {}", ip);
-            
+
                             let msg = MessageToServer::ConnectionAccepted(tcp, ip);
                             let _ = server_handle.channel.send(msg).await;
                         }

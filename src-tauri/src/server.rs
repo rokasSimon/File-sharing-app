@@ -149,10 +149,7 @@ pub async fn server_loop<M>(
     }
 }
 
-async fn handle_message<'a, M>(
-    msg: MessageToServer,
-    server_data: ServerData<'_, M>,
-) -> Result<()>
+async fn handle_message<'a, M>(msg: MessageToServer, server_data: ServerData<'_, M>) -> Result<()>
 where
     M: WindowManager,
 {
@@ -634,7 +631,7 @@ where
                                 MessageToClient::DeleteFile(
                                     server_data.server_handle.peer_id.clone(),
                                     dir.signature.clone(),
-                                    file_id
+                                    file_id,
                                 ),
                             )
                             .await;
@@ -689,8 +686,7 @@ where
                                     Err(DownloadError::FileMissing)
                                 }
                                 Some(path) => {
-                                    c
-                                        .sender
+                                    c.sender
                                         .send(MessageToClient::StartDownload {
                                             download_id,
                                             file_identifier: file_id,

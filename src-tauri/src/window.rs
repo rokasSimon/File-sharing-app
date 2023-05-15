@@ -111,11 +111,12 @@ pub trait WindowManager {
 
 pub struct MainWindowManager {
     pub window_label: &'static str,
-    pub app_handle: AppHandle
+    pub app_handle: AppHandle,
 }
 
 impl WindowManager for MainWindowManager {
     fn send(&self, action: WindowRequest) -> Result<(), tauri::Error> {
-        self.app_handle.emit_to(self.window_label, action.to_string(), action)
+        self.app_handle
+            .emit_to(self.window_label, action.to_string(), action)
     }
 }

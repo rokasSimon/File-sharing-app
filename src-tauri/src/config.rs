@@ -3,17 +3,18 @@ use anyhow::{bail, Result};
 use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, hash_map::Entry},
+    collections::{hash_map::Entry, HashMap},
     fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
-    time::Duration, str::FromStr,
+    time::Duration,
 };
 use tauri::async_runtime::Mutex;
 use uuid::Uuid;
 
-use crate::data::{PeerId, ShareDirectory, SharedFile, ContentLocation};
+use crate::data::{ContentLocation, PeerId, ShareDirectory, SharedFile};
 
 const APP_FILES_LOCATION: &str = "fileshare";
 const APP_CONFIG_LOCATION: &str = "config.json";
@@ -199,7 +200,11 @@ impl StoredConfig {
         Settings {
             minimize_on_close: app_conf.hide_on_close,
             theme: app_conf.theme.clone(),
-            download_directory: app_conf.download_directory.to_str().unwrap_or_default().to_string(),
+            download_directory: app_conf
+                .download_directory
+                .to_str()
+                .unwrap_or_default()
+                .to_string(),
         }
     }
 
@@ -235,18 +240,19 @@ impl StoredConfig {
 
                 match file {
                     None => None,
-                    Some(file) => {
-                        match &file.content_location {
-                            ContentLocation::NetworkOnly => None,
-                            ContentLocation::LocalPath(path) => Some(path.clone())
-                        }
-                    }
+                    Some(file) => match &file.content_location {
+                        ContentLocation::NetworkOnly => None,
+                        ContentLocation::LocalPath(path) => Some(path.clone()),
+                    },
                 }
             }
         }
     }
 
-    pub async fn mutate_dir<F>(&self, dir_id: Uuid, f: F) where F: FnOnce(&mut ShareDirectory) {
+    pub async fn mutate_dir<F>(&self, dir_id: Uuid, f: F)
+    where
+        F: FnOnce(&mut ShareDirectory),
+    {
         let mut directories = self.cached_data.lock().await;
         let dir = directories.get_mut(&dir_id);
 
@@ -255,9 +261,12 @@ impl StoredConfig {
         }
     }
 
-    pub async fn mutate_file<F>(&self, dir_id: Uuid, file_id: Uuid, f: F) where F: FnOnce(&mut SharedFile) {
+    pub async fn mutate_file<F>(&self, dir_id: Uuid, file_id: Uuid, f: F)
+    where
+        F: FnOnce(&mut SharedFile),
+    {
         let mut directories = self.cached_data.lock().await;
-        
+
         if let Some(dir) = directories.get_mut(&dir_id) {
             if let Some(file) = dir.shared_files.get_mut(&file_id) {
                 f(file);
@@ -277,7 +286,12 @@ impl StoredConfig {
         directories.remove(&dir_id)
     }
 
-    pub async fn generate_filepath(&self, dir_id: Uuid, file_id: Uuid, download_id: Uuid) -> Option<PathBuf> {
+    pub async fn generate_filepath(
+        &self,
+        dir_id: Uuid,
+        file_id: Uuid,
+        download_id: Uuid,
+    ) -> Option<PathBuf> {
         let directories = self.cached_data.lock().await;
         let config = self.app_config.lock().await;
         let dir = directories.get(&dir_id);
@@ -330,7 +344,11 @@ impl StoredConfig {
         bail!("Directory already shared");
     }
 
-    pub async fn synchronize(&self, dirs: Vec<ShareDirectory>, host: &PeerId) -> Vec<ShareDirectory> {
+    pub async fn synchronize(
+        &self,
+        dirs: Vec<ShareDirectory>,
+        host: &PeerId,
+    ) -> Vec<ShareDirectory> {
         let mut owned_dirs = self.cached_data.lock().await;
 
         for dir in dirs {
@@ -342,15 +360,14 @@ impl StoredConfig {
                         matched_dir.signature.shared_peers = dir.signature.shared_peers;
 
                         if !matched_dir.signature.shared_peers.contains(host) {
-                            matched_dir
-                                .signature
-                                .shared_peers
-                                .push(host.clone());
+                            matched_dir.signature.shared_peers.push(host.clone());
                         }
 
                         let mut files_to_delete: Vec<Uuid> = vec![];
                         for (file_id, file) in matched_dir.shared_files.iter_mut() {
-                            if !dir.shared_files.contains_key(file_id) && !file.owned_peers.contains(host) {
+                            if !dir.shared_files.contains_key(file_id)
+                                && !file.owned_peers.contains(host)
+                            {
                                 files_to_delete.push(*file_id);
                             }
                         }

@@ -5,12 +5,9 @@ use serde::{Deserialize, Serialize};
 use tokio_util::codec::{Decoder, Encoder};
 use uuid::Uuid;
 
-use crate::{
-    data::{ShareDirectory, ShareDirectorySignature, SharedFile, PeerId}
-};
+use crate::data::{PeerId, ShareDirectory, ShareDirectorySignature, SharedFile};
 
-use super::{DownloadError, protobuf::protobuf_types};
-
+use super::{protobuf::protobuf_types, DownloadError};
 
 const MAX_MESSAGE_SIZE: usize = 1024 * 1024 * 100; // 100 MB
 const LENGTH_MARKER_SIZE: usize = 4;
@@ -170,7 +167,9 @@ pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
         _ => info!("Encoding {:?}", src),
     }
 
-    let msg = protobuf_types::TcpMessage { message: Some(src.into()) };
+    let msg = protobuf_types::TcpMessage {
+        message: Some(src.into()),
+    };
     let enc = protobuf_types::TcpMessage::encode_to_vec(&msg);
 
     let len = enc.len() + LENGTH_MARKER_SIZE;

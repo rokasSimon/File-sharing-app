@@ -1,12 +1,12 @@
 use std::{path::PathBuf, sync::Arc};
 
-use serde::{Deserialize};
+use serde::Deserialize;
 use tauri::async_runtime::Mutex;
 use tokio::sync::mpsc;
 
-use crate::config::{StoredConfig, Settings};
+use crate::config::{Settings, StoredConfig};
 
-use super::{WindowResponse};
+use super::WindowResponse;
 
 #[derive(Deserialize, Debug)]
 pub struct OpenFile {
@@ -59,7 +59,6 @@ pub async fn network_command(
     message: WindowResponse,
     state: tauri::State<'_, Window>,
 ) -> Result<(), String> {
-
     info!("{:?}", message);
     let sender = state.server.lock().await;
 

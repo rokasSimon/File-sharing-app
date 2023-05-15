@@ -257,9 +257,7 @@ async fn try_upload<'a>(
 
     match send_result {
         Err(_) => Err(DownloadError::Disconnected),
-        Ok(_) => {
-            Ok(n == 0)
-        }
+        Ok(_) => Ok(n == 0),
     }
 }
 
@@ -269,9 +267,7 @@ async fn handle_response<'a>(
 ) -> Result<()> {
     match incoming {
         Some(result) => match result {
-            Ok(message) => {
-                handle_tcp_message(message, client_data).await
-            }
+            Ok(message) => handle_tcp_message(message, client_data).await,
             Err(e) => Err(anyhow!(e.to_string())),
         },
         None => Err(anyhow!("TCP Connection was closed")),
@@ -284,8 +280,7 @@ async fn handle_tcp_message<'a>(
 ) -> Result<()> {
     match incoming {
         TcpMessage::RequestPeerId => {
-            data
-                .tcp_write
+            data.tcp_write
                 .send(TcpMessage::ReceivePeerId(
                     data.client_data.server.peer_id.clone(),
                 ))
@@ -299,8 +294,7 @@ async fn handle_tcp_message<'a>(
 
             let _ = data.tcp_write.send(TcpMessage::Synchronize).await;
 
-            data
-                .client_data
+            data.client_data
                 .server
                 .channel
                 .send(MessageToServer::SetPeerId(
@@ -334,8 +328,7 @@ async fn handle_tcp_message<'a>(
         TcpMessage::SharedDirectory(directory) => {
             info!("Directory was shared {:?}", &directory);
 
-            data
-                .client_data
+            data.client_data
                 .server
                 .channel
                 .send(MessageToServer::SharedDirectory(directory))
@@ -356,8 +349,7 @@ async fn handle_tcp_message<'a>(
                 Some(p) => p,
             };
 
-            data
-                .client_data
+            data.client_data
                 .server
                 .channel
                 .send(MessageToServer::LeftDirectory {
@@ -394,8 +386,7 @@ async fn handle_tcp_message<'a>(
             directories.retain(|dir| dir.signature.shared_peers.contains(id));
 
             if !directories.is_empty() {
-                data
-                    .tcp_write
+                data.tcp_write
                     .send(TcpMessage::ReceiveDirectories(directories))
                     .await?;
             }
@@ -419,8 +410,7 @@ async fn handle_tcp_message<'a>(
                 .await;
 
             if success {
-                data
-                    .client_data
+                data.client_data
                     .server
                     .channel
                     .send(MessageToServer::UpdatedDirectory(directory.identifier))
@@ -446,8 +436,7 @@ async fn handle_tcp_message<'a>(
                 .await;
 
             if success {
-                data
-                    .client_data
+                data.client_data
                     .server
                     .channel
                     .send(MessageToServer::UpdatedDirectory(directory.identifier))
@@ -549,8 +538,7 @@ async fn handle_tcp_message<'a>(
 
                                 Err(DownloadError::FileTooLarge)
                             } else {
-                                data
-                                    .client_data
+                                data.client_data
                                     .server
                                     .channel
                                     .send(MessageToServer::DownloadUpdate {
@@ -568,8 +556,7 @@ async fn handle_tcp_message<'a>(
 
             if let Err(e) = result {
                 data.downloads.remove(&download_id);
-                data
-                    .client_data
+                data.client_data
                     .server
                     .channel
                     .send(MessageToServer::CanceledDownload {
@@ -591,8 +578,7 @@ async fn handle_tcp_message<'a>(
                 Some(download) => {
                     let _ = fs::remove_file(download.output_path).await;
 
-                    data
-                        .client_data
+                    data.client_data
                         .server
                         .channel
                         .send(MessageToServer::CanceledDownload {
@@ -630,8 +616,7 @@ async fn handle_tcp_message<'a>(
                 .await;
 
             if success {
-                data
-                    .client_data
+                data.client_data
                     .server
                     .channel
                     .send(MessageToServer::FinishedDownload {
@@ -641,8 +626,7 @@ async fn handle_tcp_message<'a>(
                     })
                     .await?;
             } else {
-                data
-                    .client_data
+                data.client_data
                     .server
                     .channel
                     .send(MessageToServer::CanceledDownload {

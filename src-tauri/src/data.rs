@@ -1,7 +1,7 @@
+use anyhow::{anyhow, Result};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
-use anyhow::{Result, anyhow};
-use chrono::{Utc, DateTime};
-use serde::{Serialize, Deserialize};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -24,13 +24,21 @@ impl ShareDirectory {
             .retain(|_, file| !file.owned_peers.is_empty());
     }
 
-    pub fn add_files(&mut self, files: Vec<SharedFile>, date_modified: DateTime<Utc>) -> Result<()> {
+    pub fn add_files(
+        &mut self,
+        files: Vec<SharedFile>,
+        date_modified: DateTime<Utc>,
+    ) -> Result<()> {
         for file in files {
             if self.shared_files.contains_key(&file.identifier) {
                 return Err(anyhow!("File has already been added"));
             }
 
-            if self.shared_files.values().any(|f| f.content_hash == file.content_hash) {
+            if self
+                .shared_files
+                .values()
+                .any(|f| f.content_hash == file.content_hash)
+            {
                 return Err(anyhow!("File with same content has already been added"));
             }
 
@@ -68,11 +76,7 @@ impl ShareDirectory {
         }
     }
 
-    pub fn add_peers(
-        &mut self,
-        new_peers: Vec<PeerId>,
-        date_modified: DateTime<Utc>
-    ) {
+    pub fn add_peers(&mut self, new_peers: Vec<PeerId>, date_modified: DateTime<Utc>) {
         self.signature.last_modified = date_modified;
         self.signature.shared_peers.extend(new_peers);
     }
@@ -185,7 +189,6 @@ impl Display for PeerId {
     }
 }
 
-
 #[cfg(tests)]
 mod tests {
 
@@ -196,7 +199,7 @@ mod tests {
 
     use crate::peer_id::PeerId;
 
-    use super::{ShareDirectorySignature, SharedFile, ShareDirectory};
+    use super::{ShareDirectory, ShareDirectorySignature, SharedFile};
 
     const HOSTNAME: &str = "test";
     const PEER_UUID: Uuid = Uuid::nil();
@@ -222,16 +225,14 @@ mod tests {
             last_modified: now,
             content_location: super::ContentLocation::NetworkOnly,
             owned_peers: vec![peer],
-            size: 0
+            size: 0,
         };
 
-        let shared_files = HashMap::from([
-            (Uuid::nil(), shared_file)
-        ]);
+        let shared_files = HashMap::from([(Uuid::nil(), shared_file)]);
 
         ShareDirectory {
             signature,
-            shared_files
+            shared_files,
         }
     }
 
@@ -242,14 +243,19 @@ mod tests {
         let peer_id_bytes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
         let new_peer = PeerId {
             hostname: "owner".to_string(),
-            uuid: Uuid::from_bytes(peer_id_bytes)
+            uuid: Uuid::from_bytes(peer_id_bytes),
         };
         let file_ids = vec![Uuid::nil()];
 
         directory.add_owner(new_peer.clone(), mod_date, file_ids);
 
         assert!(directory.signature.last_modified == mod_date);
-        assert!(directory.shared_files.get(&Uuid::nil()).unwrap().owned_peers.contains(&new_peer));
+        assert!(directory
+            .shared_files
+            .get(&Uuid::nil())
+            .unwrap()
+            .owned_peers
+            .contains(&new_peer));
     }
 
     #[test]
@@ -265,7 +271,15 @@ mod tests {
         directory.add_owner(new_peer.clone(), mod_date, file_ids);
 
         assert!(directory.signature.last_modified == mod_date);
-        assert_eq!(directory.shared_files.get(&Uuid::nil()).unwrap().owned_peers.len(), 1);
+        assert_eq!(
+            directory
+                .shared_files
+                .get(&Uuid::nil())
+                .unwrap()
+                .owned_peers
+                .len(),
+            1
+        );
     }
 
     #[test]
@@ -284,7 +298,7 @@ mod tests {
             last_modified: mod_date,
             content_location: crate::data::ContentLocation::NetworkOnly,
             owned_peers: vec![myself],
-            size: 1
+            size: 1,
         }];
 
         let result = directory.add_files(files, mod_date);
@@ -311,7 +325,7 @@ mod tests {
             last_modified: mod_date,
             content_location: crate::data::ContentLocation::NetworkOnly,
             owned_peers: vec![myself],
-            size: 1
+            size: 1,
         }];
 
         let result = directory.add_files(files, mod_date);
@@ -337,7 +351,7 @@ mod tests {
             last_modified: mod_date,
             content_location: crate::data::ContentLocation::NetworkOnly,
             owned_peers: vec![myself],
-            size: 1
+            size: 1,
         }];
 
         let result = directory.add_files(files, mod_date);
@@ -374,15 +388,29 @@ mod tests {
         let file_id = Uuid::nil();
         let new_peer = PeerId {
             hostname: "test 2".to_string(),
-            uuid: Uuid::from_bytes([1; 16])
+            uuid: Uuid::from_bytes([1; 16]),
         };
-        directory.shared_files.get_mut(&Uuid::nil()).unwrap().owned_peers.push(new_peer.clone());
+        directory
+            .shared_files
+            .get_mut(&Uuid::nil())
+            .unwrap()
+            .owned_peers
+            .push(new_peer.clone());
 
         directory.remove_files(&myself, mod_date, vec![file_id]);
 
         assert!(directory.signature.last_modified == mod_date);
         assert_eq!(directory.shared_files.len(), 1);
-        assert_eq!(directory.shared_files.get(&file_id).unwrap().owned_peers.get(0).unwrap(), &new_peer);
+        assert_eq!(
+            directory
+                .shared_files
+                .get(&file_id)
+                .unwrap()
+                .owned_peers
+                .get(0)
+                .unwrap(),
+            &new_peer
+        );
     }
 
     #[test]
@@ -413,13 +441,23 @@ mod tests {
             uuid: Uuid::from_bytes([1; 16]),
         };
         directory.signature.shared_peers.push(new_peer.clone());
-        directory.shared_files.get_mut(&Uuid::nil()).unwrap().owned_peers.push(new_peer.clone());
+        directory
+            .shared_files
+            .get_mut(&Uuid::nil())
+            .unwrap()
+            .owned_peers
+            .push(new_peer.clone());
 
         directory.remove_peer(&myself, mod_date);
 
         assert!(directory.signature.last_modified == mod_date);
         assert!(directory.signature.shared_peers.contains(&new_peer));
-        assert!(directory.shared_files.get(&Uuid::nil()).unwrap().owned_peers.contains(&new_peer));
+        assert!(directory
+            .shared_files
+            .get(&Uuid::nil())
+            .unwrap()
+            .owned_peers
+            .contains(&new_peer));
         assert_eq!(directory.shared_files.len(), 1);
     }
 
@@ -443,7 +481,15 @@ mod tests {
         assert!(directory.signature.shared_peers.contains(&myself));
         assert_eq!(directory.signature.shared_peers.len(), 1);
         assert_eq!(directory.shared_files.len(), 1);
-        assert_eq!(directory.shared_files.get(&Uuid::nil()).unwrap().owned_peers.get(0).unwrap(), &myself);
+        assert_eq!(
+            directory
+                .shared_files
+                .get(&Uuid::nil())
+                .unwrap()
+                .owned_peers
+                .get(0)
+                .unwrap(),
+            &myself
+        );
     }
-
 }
