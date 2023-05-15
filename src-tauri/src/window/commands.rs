@@ -1,6 +1,6 @@
-use std::{path::PathBuf, sync::Arc, str::FromStr};
+use std::{path::PathBuf, sync::Arc};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use tauri::async_runtime::Mutex;
 use tokio::sync::mpsc;
 
@@ -45,7 +45,7 @@ pub async fn save_settings(
 ) -> Result<(), String> {
     info!("Received new settings {:#?}", message);
 
-    state.set_settings(message).await;
+    let _ = state.set_settings(message).await;
 
     Ok(())
 }
