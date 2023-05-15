@@ -73,9 +73,9 @@ pub enum DownloadError {
     WriteError,
 }
 
-impl DownloadError {
-    pub fn to_string(&self) -> String {
-        match self {
+impl fmt::Display for DownloadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let msg = match self {
             DownloadError::NoClientsConnected => "No clients to download from. Reconnect other devices to network".to_owned(),
             DownloadError::DirectoryMissing => "Download directory is missing. File might have been removed while being downloaded.".to_owned(),
             DownloadError::FileMissing => "Download file is missing. File might have been removed while downloading.".to_owned(),
@@ -85,13 +85,9 @@ impl DownloadError {
             DownloadError::Disconnected => "Download was canceled since one of the clients disconnected".to_owned(),
             DownloadError::ReadError => "Could not read file to download.".to_owned(),
             DownloadError::WriteError => "Could not write file.".to_owned(),
-        }
-    }
-}
+        };
 
-impl fmt::Display for DownloadError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", msg)
     }
 }
 
@@ -154,7 +150,7 @@ pub async fn client_loop(
     };
 
     loop {
-        let up = handle.uploading.clone();
+        let up = *handle.uploading;
 
         tokio::select! {
 
@@ -226,7 +222,7 @@ async fn handle_uploads<'a>(client_data: &mut ClientDataHandle<'a>) -> Result<()
         client_data.uploads.remove(&download_id);
     }
 
-    if client_data.uploads.len() == 0 {
+    if client_data.uploads.is_empty() {
         *client_data.uploading = false;
     }
 
@@ -260,9 +256,9 @@ async fn try_upload<'a>(
     let send_result = tcp_write.send(msg).await;
 
     match send_result {
-        Err(_) => return Err(DownloadError::Disconnected),
+        Err(_) => Err(DownloadError::Disconnected),
         Ok(_) => {
-            return Ok(n == 0);
+            Ok(n == 0)
         }
     }
 }
@@ -274,9 +270,7 @@ async fn handle_response<'a>(
     match incoming {
         Some(result) => match result {
             Ok(message) => {
-                let result = handle_tcp_message(message, client_data).await;
-
-                result
+                handle_tcp_message(message, client_data).await
             }
             Err(e) => Err(anyhow!(e.to_string())),
         },
@@ -290,7 +284,7 @@ async fn handle_tcp_message<'a>(
 ) -> Result<()> {
     match incoming {
         TcpMessage::RequestPeerId => {
-            let _ = data
+            data
                 .tcp_write
                 .send(TcpMessage::ReceivePeerId(
                     data.client_data.server.peer_id.clone(),
@@ -305,7 +299,7 @@ async fn handle_tcp_message<'a>(
 
             let _ = data.tcp_write.send(TcpMessage::Synchronize).await;
 
-            let _ = data
+            data
                 .client_data
                 .server
                 .channel
@@ -332,7 +326,7 @@ async fn handle_tcp_message<'a>(
                 }
             };
 
-            let _ = data.client_data.server.channel.send(msg).await?;
+            data.client_data.server.channel.send(msg).await?;
 
             Ok(())
         }
@@ -340,7 +334,7 @@ async fn handle_tcp_message<'a>(
         TcpMessage::SharedDirectory(directory) => {
             info!("Directory was shared {:?}", &directory);
 
-            let _ = data
+            data
                 .client_data
                 .server
                 .channel
@@ -362,7 +356,7 @@ async fn handle_tcp_message<'a>(
                 Some(p) => p,
             };
 
-            let _ = data
+            data
                 .client_data
                 .server
                 .channel
@@ -399,8 +393,8 @@ async fn handle_tcp_message<'a>(
 
             directories.retain(|dir| dir.signature.shared_peers.contains(id));
 
-            if directories.len() > 0 {
-                let _ = data
+            if !directories.is_empty() {
+                data
                     .tcp_write
                     .send(TcpMessage::ReceiveDirectories(directories))
                     .await?;
@@ -418,14 +412,14 @@ async fn handle_tcp_message<'a>(
                 .mutate_dir(directory.identifier, |dir| {
                     let result = dir.add_files(files, directory.last_modified);
 
-                    if let Ok(_) = result {
+                    if result.is_ok() {
                         success = true;
                     }
                 })
                 .await;
 
             if success {
-                let _ = data
+                data
                     .client_data
                     .server
                     .channel
@@ -452,7 +446,7 @@ async fn handle_tcp_message<'a>(
                 .await;
 
             if success {
-                let _ = data
+                data
                     .client_data
                     .server
                     .channel
@@ -555,7 +549,7 @@ async fn handle_tcp_message<'a>(
 
                                 Err(DownloadError::FileTooLarge)
                             } else {
-                                let _ = data
+                                data
                                     .client_data
                                     .server
                                     .channel
@@ -574,7 +568,7 @@ async fn handle_tcp_message<'a>(
 
             if let Err(e) = result {
                 data.downloads.remove(&download_id);
-                let _ = data
+                data
                     .client_data
                     .server
                     .channel
@@ -597,7 +591,7 @@ async fn handle_tcp_message<'a>(
                 Some(download) => {
                     let _ = fs::remove_file(download.output_path).await;
 
-                    let _ = data
+                    data
                         .client_data
                         .server
                         .channel
@@ -636,7 +630,7 @@ async fn handle_tcp_message<'a>(
                 .await;
 
             if success {
-                let _ = data
+                data
                     .client_data
                     .server
                     .channel
@@ -647,7 +641,7 @@ async fn handle_tcp_message<'a>(
                     })
                     .await?;
             } else {
-                let _ = data
+                data
                     .client_data
                     .server
                     .channel
@@ -678,8 +672,7 @@ async fn handle_tcp_message<'a>(
                 .await;
 
             if success {
-                let _ = data
-                    .client_data
+                data.client_data
                     .server
                     .channel
                     .send(MessageToServer::UpdatedDirectory(directory_identifier))
@@ -786,7 +779,11 @@ async fn handle_server_messages(
                     match file_handle {
                         Err(_) => Err(DownloadError::WriteError),
                         Ok(file_handle) => {
-                            let file_name = &destination.file_name().unwrap_or_default().to_str().unwrap_or_default();
+                            let file_name = &destination
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_str()
+                                .unwrap_or_default();
 
                             data.downloads.insert(
                                 download_id,
@@ -801,8 +798,7 @@ async fn handle_server_messages(
                                 },
                             );
 
-                            let _ = data
-                                .tcp_write
+                            data.tcp_write
                                 .send(TcpMessage::StartDownload {
                                     download_id,
                                     file_id: file_identifier,
@@ -810,8 +806,7 @@ async fn handle_server_messages(
                                 })
                                 .await?;
 
-                            let _ = data
-                                .client_data
+                            data.client_data
                                 .server
                                 .channel
                                 .send(MessageToServer::StartedDownload {
@@ -836,8 +831,7 @@ async fn handle_server_messages(
             if let Err(e) = result {
                 error!("{}", e);
 
-                let _ = data
-                    .client_data
+                data.client_data
                     .server
                     .channel
                     .send(MessageToServer::CanceledDownload {
@@ -856,8 +850,7 @@ async fn handle_server_messages(
             file_identifier,
             date_modified,
         } => {
-            let _ = data
-                .tcp_write
+            data.tcp_write
                 .send(TcpMessage::DownloadedFile {
                     peer_id,
                     directory_identifier,
@@ -895,16 +888,19 @@ async fn disconnect_self(client_data_handle: &mut ClientDataHandle<'_>) {
     {
         for (id, download) in client_data_handle.downloads.iter_mut() {
             download.canceled = true;
-            if let Ok(_) = download.output_file.shutdown().await {
+            if download.output_file.shutdown().await.is_ok() {
                 let _ = fs::remove_file(download.output_path.clone()).await;
             }
 
-            let _ = client_data_handle.client_data.server.channel.send(
-                MessageToServer::CanceledDownload {
+            let _ = client_data_handle
+                .client_data
+                .server
+                .channel
+                .send(MessageToServer::CanceledDownload {
                     download_id: *id,
                     cancel_reason: "Client was disconnected".to_string(),
-                },
-            ).await;
+                })
+                .await;
         }
     }
 

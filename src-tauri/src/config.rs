@@ -28,7 +28,7 @@ pub fn load_stored_data() -> (StoredConfig, PeerId) {
     let config_path = ensure_path(app_dir.config_dir, APP_CONFIG_LOCATION);
     let cache_path = ensure_path(app_dir.data_dir.clone(), APP_CACHE_LOCATION);
 
-    let config_str = fs::read_to_string(&config_path).expect("to be able to read the config file");
+    let config_str = fs::read_to_string(config_path).expect("to be able to read the config file");
     let mut config: AppConfig = serde_json::from_str(&config_str).unwrap_or_default();
 
     if config.peer_id.is_none() {
@@ -222,7 +222,7 @@ impl StoredConfig {
     pub async fn get_directory(&self, dir_id: Uuid) -> Option<ShareDirectory> {
         let directories = self.cached_data.lock().await;
 
-        directories.get(&dir_id).map(|dir| dir.clone())
+        directories.get(&dir_id).cloned()
     }
 
     pub async fn get_filepath(&self, dir_id: Uuid, file_id: Uuid) -> Option<PathBuf> {
@@ -350,10 +350,8 @@ impl StoredConfig {
 
                         let mut files_to_delete: Vec<Uuid> = vec![];
                         for (file_id, file) in matched_dir.shared_files.iter_mut() {
-                            if !dir.shared_files.contains_key(file_id) {
-                                if !file.owned_peers.contains(host) {
-                                    files_to_delete.push(*file_id);
-                                }
+                            if !dir.shared_files.contains_key(file_id) && !file.owned_peers.contains(host) {
+                                files_to_delete.push(*file_id);
                             }
                         }
 
