@@ -7,25 +7,26 @@ extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 
+pub mod client;
+pub mod config;
+pub mod data;
 pub mod listen;
 pub mod mdns;
-pub mod window;
 pub mod server;
-pub mod client;
-pub mod data;
-pub mod config;
+pub mod window;
 
-use std::{
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use config::{load_stored_data, write_stored_data, save_config_loop};
+use config::{load_stored_data, save_config_loop, write_stored_data};
 use listen::start_accept;
-use mdns::{MessageToMdns, start_mdns};
-use server::{ServerHandle, MessageToServer, server_loop};
+use mdns::{start_mdns, MessageToMdns};
+use server::{server_loop, MessageToServer, ServerHandle};
 use tauri::{async_runtime::Mutex, CustomMenuItem, Manager, SystemTray, SystemTrayMenu};
-use tokio::sync::{mpsc};
-use window::{MainWindowManager, commands::{Window, network_command, save_settings, get_settings, open_file}, WindowResponse};
+use tokio::sync::mpsc;
+use window::{
+    commands::{get_settings, network_command, open_file, save_settings, Window},
+    MainWindowManager, WindowResponse,
+};
 use window_shadows::set_shadow;
 
 const THREAD_CHANNEL_SIZE: usize = 64;
@@ -56,8 +57,8 @@ fn main() {
     let settings_config = stored_data.clone();
     tauri::Builder::default()
         .on_system_tray_event(|app, event| match event {
-            tauri::SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
-                "exit" => {
+            tauri::SystemTrayEvent::MenuItemClick { id, .. } => {
+                if id.as_str() == "exit" {
                     let window = app.get_window(MAIN_WINDOW_LABEL);
 
                     if let Some(window) = window {
@@ -68,8 +69,7 @@ fn main() {
                         }
                     }
                 }
-                _ => (),
-            },
+            }
             tauri::SystemTrayEvent::LeftClick { .. } => {
                 let window = app.get_window(MAIN_WINDOW_LABEL);
 
@@ -114,16 +114,15 @@ fn main() {
             get_settings
         ])
         .setup(move |app| {
-            let window = app.get_window(MAIN_WINDOW_LABEL).expect("To find main window");
+            let window = app
+                .get_window(MAIN_WINDOW_LABEL)
+                .expect("To find main window");
 
             if let Err(e) = set_shadow(&window, true) {
                 warn!("Could not set shadows: {}", e)
             }
 
-            tauri::async_runtime::spawn(start_accept(
-                mdns_sender.clone(),
-                server_handle.clone(),
-            ));
+            tauri::async_runtime::spawn(start_accept(mdns_sender.clone(), server_handle.clone()));
             tauri::async_runtime::spawn(start_mdns(
                 mdns_receiver,
                 server_handle.clone(),

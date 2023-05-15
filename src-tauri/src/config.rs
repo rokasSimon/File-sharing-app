@@ -1,9 +1,9 @@
 use anyhow::{bail, Result};
-use async_trait::async_trait;
+
 use platform_dirs::AppDirs;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map::Entry},
     fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
@@ -47,7 +47,7 @@ pub fn load_stored_data() -> (StoredConfig, PeerId) {
         config.download_directory = default_download_path;
     }
 
-    let cache_str = fs::read_to_string(&cache_path).expect("to be able to read cache file");
+    let cache_str = fs::read_to_string(cache_path).expect("to be able to read cache file");
     let cache: HashMap<Uuid, ShareDirectory> = serde_json::from_str(&cache_str).unwrap_or_default();
 
     (StoredConfig::new(config, cache), peer_id)
@@ -222,10 +222,7 @@ impl StoredConfig {
     pub async fn get_directory(&self, dir_id: Uuid) -> Option<ShareDirectory> {
         let directories = self.cached_data.lock().await;
 
-        match directories.get(&dir_id) {
-            None => None,
-            Some(dir) => Some(dir.clone())
-        }
+        directories.get(&dir_id).map(|dir| dir.clone())
     }
 
     pub async fn get_filepath(&self, dir_id: Uuid, file_id: Uuid) -> Option<PathBuf> {
@@ -316,12 +313,7 @@ impl StoredConfig {
             Some(dir) => {
                 let file = dir.shared_files.get(&file_id);
 
-                match file {
-                    None => None,
-                    Some(file) => {
-                        Some(file.owned_peers.clone())
-                    }
-                }
+                file.map(|file| file.owned_peers.clone())
             }
         }
     }
@@ -329,8 +321,8 @@ impl StoredConfig {
     pub async fn shared_directory(&self, dir: ShareDirectory) -> Result<()> {
         let mut directories = self.cached_data.lock().await;
 
-        if !directories.contains_key(&dir.signature.identifier) {
-            directories.insert(dir.signature.identifier, dir);
+        if let Entry::Vacant(e) = directories.entry(dir.signature.identifier) {
+            e.insert(dir);
 
             return Ok(());
         }
@@ -349,18 +341,18 @@ impl StoredConfig {
                     if dir.signature.last_modified > matched_dir.signature.last_modified {
                         matched_dir.signature.shared_peers = dir.signature.shared_peers;
 
-                        if !matched_dir.signature.shared_peers.contains(&host) {
+                        if !matched_dir.signature.shared_peers.contains(host) {
                             matched_dir
                                 .signature
                                 .shared_peers
                                 .push(host.clone());
                         }
 
-                        let mut files_to_delete = vec![];
+                        let mut files_to_delete: Vec<Uuid> = vec![];
                         for (file_id, file) in matched_dir.shared_files.iter_mut() {
-                            if let None = dir.shared_files.get(file_id) {
-                                if !file.owned_peers.contains(&host) {
-                                    files_to_delete.push(file_id.clone());
+                            if !dir.shared_files.contains_key(file_id) {
+                                if !file.owned_peers.contains(host) {
+                                    files_to_delete.push(*file_id);
                                 }
                             }
                         }
@@ -377,7 +369,7 @@ impl StoredConfig {
 
                         matched_dir
                             .shared_files
-                            .retain(|file_id, _| !files_to_delete.contains(&file_id));
+                            .retain(|file_id, _| !files_to_delete.contains(file_id));
 
                         for file in files_to_add {
                             matched_dir.shared_files.insert(file.identifier, file);

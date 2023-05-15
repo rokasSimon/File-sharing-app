@@ -21,7 +21,7 @@ impl ShareDirectory {
         }
 
         self.shared_files
-            .retain(|_, file| file.owned_peers.len() != 0);
+            .retain(|_, file| !file.owned_peers.is_empty());
     }
 
     pub fn add_files(&mut self, files: Vec<SharedFile>, date_modified: DateTime<Utc>) -> Result<()> {
@@ -39,7 +39,7 @@ impl ShareDirectory {
 
         self.signature.last_modified = date_modified;
 
-        return Ok(())
+        Ok(())
     }
 
     pub fn remove_files(
@@ -57,7 +57,7 @@ impl ShareDirectory {
                 Some(file) => {
                     file.owned_peers.retain(|peer| peer != peer_id);
 
-                    file.owned_peers.len() == 0
+                    file.owned_peers.is_empty()
                 }
                 None => false,
             };
@@ -90,7 +90,7 @@ impl ShareDirectory {
             let some_file = self.shared_files.get_mut(&file_id);
 
             if let Some(file) = some_file {
-                if !file.owned_peers.contains(&new_owner) {
+                if !file.owned_peers.contains(new_owner) {
                     file.owned_peers.push(new_owner.clone());
 
                     if let Some(new_location) = location.take() {
@@ -153,14 +153,6 @@ pub struct PeerId {
 }
 
 impl PeerId {
-    pub fn to_string(&self) -> String {
-        let uuid_str = self.uuid.to_string();
-
-        let parts = [self.hostname.as_str(), uuid_str.as_str()];
-
-        parts.join(INSTANCE_SEPARATOR)
-    }
-
     pub fn parse(instance: &str) -> Option<Self> {
         let (hostname, uuid_str) = instance.split_once(INSTANCE_SEPARATOR)?;
         let uuid = Uuid::parse_str(uuid_str).ok()?;
@@ -186,7 +178,10 @@ impl PeerId {
 
 impl Display for PeerId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
+        let uuid_str = self.uuid.to_string();
+        let parts = [self.hostname.as_str(), uuid_str.as_str()];
+
+        write!(f, "{}", parts.join(INSTANCE_SEPARATOR))
     }
 }
 

@@ -32,7 +32,7 @@ pub async fn open_file(message: OpenFile) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_settings(
-    message: String,
+    _message: String,
     state: tauri::State<'_, Arc<StoredConfig>>,
 ) -> Result<Settings, String> {
     Ok(state.get_settings().await)

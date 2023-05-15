@@ -5,7 +5,7 @@ use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use tauri::async_runtime::Mutex;
+
 use tokio::{
     fs::{self, File},
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
@@ -111,8 +111,6 @@ struct UploadHandle {
     canceled: bool,
     reader: BufReader<File>,
     buffer: [u8; FILE_CHUNK_SIZE],
-    file_id: Uuid,
-    dir_id: Uuid,
 }
 
 pub struct ClientData {
@@ -445,7 +443,7 @@ async fn handle_tcp_message<'a>(
         } => {
             info!("Received delete request for file {}", file);
 
-            let mut success = false;
+            let success = false;
             data.client_data
                 .config
                 .mutate_dir(directory.identifier, |dir| {
@@ -487,7 +485,7 @@ async fn handle_tcp_message<'a>(
                     let file = File::open(path).await;
 
                     match file {
-                        Err(e) => {
+                        Err(_e) => {
                             data.tcp_write
                                 .send(TcpMessage::DownloadError {
                                     error: DownloadError::FileMissing,
@@ -497,8 +495,6 @@ async fn handle_tcp_message<'a>(
                         }
                         Ok(file) => {
                             let upload = UploadHandle {
-                                dir_id,
-                                file_id,
                                 canceled: false,
                                 reader: BufReader::new(file),
                                 buffer: [0; FILE_CHUNK_SIZE],
@@ -623,7 +619,7 @@ async fn handle_tcp_message<'a>(
                 return Ok(());
             }
 
-            let mut download = data.downloads.remove(&download_id).unwrap();
+            let download = data.downloads.remove(&download_id).unwrap();
             let mut success = false;
             data.client_data
                 .config
@@ -837,72 +833,6 @@ async fn handle_server_messages(
                 }
             };
 
-            // let result = match directory {
-            //     None => Err(DownloadError::DirectoryMissing),
-            //     Some(dir) => {
-            //         let file = dir.shared_files.get(&file_identifier);
-
-            //         match file {
-            //             None => Err(DownloadError::FileMissing),
-            //             Some(file) => match &file.content_location {
-            //                 ContentLocation::LocalPath(_) => {
-            //                     error!("File has already been downloaded");
-
-            //                     return Ok(());
-            //                 }
-            //                 ContentLocation::NetworkOnly => {
-            //                     let file_handle = File::create(&destination).await;
-            //                     match file_handle {
-            //                         Err(_) => Err(DownloadError::WriteError),
-            //                         Ok(file_handle) => {
-            //                             data.downloads.insert(
-            //                                 download_id,
-            //                                 DownloadHandle {
-            //                                     canceled: false,
-            //                                     bytes_total: file.size,
-            //                                     bytes_done: 0,
-            //                                     output_file: file_handle,
-            //                                     output_path: destination.clone(),
-            //                                     file_id: file_identifier,
-            //                                     dir_id: directory_identifier,
-            //                                 },
-            //                             );
-
-            //                             let _ = data
-            //                                 .tcp_write
-            //                                 .send(TcpMessage::StartDownload {
-            //                                     download_id,
-            //                                     file_id: file_identifier,
-            //                                     dir_id: directory_identifier,
-            //                                 })
-            //                                 .await?;
-
-            //                             let _ = data
-            //                                 .client_data
-            //                                 .server
-            //                                 .channel
-            //                                 .send(MessageToServer::StartedDownload {
-            //                                     download_info: Download {
-            //                                         peer: this_client.clone(),
-            //                                         download_id,
-            //                                         file_identifier,
-            //                                         directory_identifier,
-            //                                         progress: 0,
-            //                                         file_name: file.name.clone(),
-            //                                         file_path: destination,
-            //                                     },
-            //                                 })
-            //                                 .await?;
-
-            //                             Ok(())
-            //                         }
-            //                     }
-            //                 }
-            //             },
-            //         }
-            //     }
-            // };
-
             if let Err(e) = result {
                 error!("{}", e);
 
@@ -974,7 +904,7 @@ async fn disconnect_self(client_data_handle: &mut ClientDataHandle<'_>) {
                     download_id: *id,
                     cancel_reason: "Client was disconnected".to_string(),
                 },
-            );
+            ).await;
         }
     }
 
@@ -988,41 +918,4 @@ async fn disconnect_self(client_data_handle: &mut ClientDataHandle<'_>) {
         "Disconneting client {}.",
         client_data_handle.client_data.addr
     );
-}
-
-async fn start_upload(
-    directories: &mut HashMap<Uuid, ShareDirectory>,
-    dir_id: Uuid,
-    file_id: Uuid,
-) -> Result<UploadHandle, DownloadError> {
-    let dir = directories.get(&dir_id);
-    let dir = match dir {
-        None => return Err(DownloadError::DirectoryMissing),
-        Some(dir) => dir,
-    };
-
-    let file = dir.shared_files.get(&file_id);
-    let file = match file {
-        None => return Err(DownloadError::FileMissing),
-        Some(file) => file,
-    };
-
-    let file_path = match &file.content_location {
-        ContentLocation::NetworkOnly => return Err(DownloadError::FileNotOwned),
-        ContentLocation::LocalPath(path) => path.clone(),
-    };
-
-    let file = File::open(file_path).await;
-    let file = match file {
-        Err(_) => return Err(DownloadError::WriteError),
-        Ok(file) => file,
-    };
-
-    Ok(UploadHandle {
-        dir_id,
-        file_id,
-        canceled: false,
-        reader: BufReader::new(file),
-        buffer: [0; FILE_CHUNK_SIZE],
-    })
 }

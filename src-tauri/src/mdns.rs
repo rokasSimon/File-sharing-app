@@ -1,11 +1,14 @@
-use std::{net::{SocketAddrV4}, collections::HashMap, time::Duration};
+use std::{collections::HashMap, net::SocketAddrV4, time::Duration};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use mdns_sd::{ServiceInfo, ServiceEvent, ServiceDaemon};
-use tokio::sync::{mpsc};
+use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+use tokio::sync::mpsc;
 
-use crate::{server::{ServerHandle, MessageToServer}, data::PeerId};
+use crate::{
+    data::PeerId,
+    server::{MessageToServer, ServerHandle},
+};
 
 pub const SERVICE_TYPE: &str = "_ktu_fileshare._tcp.local.";
 pub const MDNS_UPDATE_TIME: u64 = 15;
@@ -15,7 +18,7 @@ pub const RECONNECT_TIME: i64 = 15;
 pub enum MessageToMdns {
     RemoveService(ServiceInfo),
     ConnectedService(ServiceInfo),
-    SwitchedNetwork(SocketAddrV4)
+    SwitchedNetwork(SocketAddrV4),
 }
 
 pub struct ResolvedServiceInfo {
@@ -95,7 +98,7 @@ pub async fn start_mdns(
 
                         my_hostname = Some(service.get_hostname().to_string());
                         fullname = Some(service.get_fullname().to_string());
-                        
+
                         let _ = mdns.register(service);
                     }
                 }
@@ -125,29 +128,26 @@ async fn handle_mdns_event(
     my_hostname: &Option<String>,
     resolved_services: &mut HashMap<String, ResolvedServiceInfo>,
 ) {
-    match event {
-        ServiceEvent::ServiceResolved(service) => {
-            info!("Resolved service {:?}", service);
+    if let ServiceEvent::ServiceResolved(service) = event {
+        info!("Resolved service {:?}", service);
 
-            if let Some(hostname) = my_hostname {
-                if service.get_hostname() == hostname {
-                    return;
-                }
-            }
-
-            let existing_service = resolved_services.get(service.get_fullname());
-            match existing_service {
-                Some(_) => return,
-                None => {
-                    info!("Adding service: {:?}", service);
-
-                    let _ = server_handle
-                        .channel
-                        .send(MessageToServer::ServiceFound(service.clone()))
-                        .await;
-                }
+        if let Some(hostname) = my_hostname {
+            if service.get_hostname() == hostname {
+                return;
             }
         }
-        _ => (),
+
+        let existing_service = resolved_services.get(service.get_fullname());
+        match existing_service {
+            Some(_) => (),
+            None => {
+                info!("Adding service: {:?}", service);
+
+                let _ = server_handle
+                    .channel
+                    .send(MessageToServer::ServiceFound(service.clone()))
+                    .await;
+            }
+        }
     }
 }
