@@ -7,26 +7,26 @@ extern crate pretty_env_logger;
 #[macro_use]
 extern crate log;
 
+pub mod client;
+pub mod config;
+pub mod data;
 pub mod listen;
 pub mod mdns;
-pub mod window;
 pub mod server;
-pub mod client;
-pub mod data;
-pub mod config;
+pub mod window;
 
-use std::{
-    net::{SocketAddr, SocketAddrV4},
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use config::{load_stored_data, write_stored_data, save_config_loop};
+use config::{load_stored_data, save_config_loop, write_stored_data};
 use listen::start_accept;
-use mdns::{MessageToMdns, start_mdns};
-use server::{ServerHandle, MessageToServer, server_loop};
+use mdns::{start_mdns, MessageToMdns};
+use server::{server_loop, MessageToServer, ServerHandle};
 use tauri::{async_runtime::Mutex, CustomMenuItem, Manager, SystemTray, SystemTrayMenu};
-use tokio::sync::{mpsc, oneshot};
-use window::{MainWindowManager, commands::{Window, network_command, save_settings, get_settings, open_file}, WindowResponse};
+use tokio::sync::mpsc;
+use window::{
+    commands::{get_settings, network_command, open_file, save_settings, Window},
+    MainWindowManager, WindowResponse,
+};
 use window_shadows::set_shadow;
 
 const THREAD_CHANNEL_SIZE: usize = 64;
@@ -35,13 +35,7 @@ const MAIN_WINDOW_LABEL: &str = "main";
 fn main() {
     pretty_env_logger::init();
 
-    let conf = load_stored_data();
-    let id = conf
-        .app_config
-        .blocking_lock()
-        .peer_id
-        .clone()
-        .expect("PeerID should be set on startup");
+    let (conf, id) = load_stored_data();
     let stored_data = Arc::new(conf);
 
     let (network_sender, network_receiver) = mpsc::channel::<WindowResponse>(THREAD_CHANNEL_SIZE);
@@ -50,7 +44,6 @@ fn main() {
 
     let server_handle = ServerHandle {
         channel: server_sender,
-        config: stored_data.clone(),
         peer_id: id.clone(),
     };
 
@@ -64,8 +57,8 @@ fn main() {
     let settings_config = stored_data.clone();
     tauri::Builder::default()
         .on_system_tray_event(|app, event| match event {
-            tauri::SystemTrayEvent::MenuItemClick { id, .. } => match id.as_str() {
-                "exit" => {
+            tauri::SystemTrayEvent::MenuItemClick { id, .. } => {
+                if id.as_str() == "exit" {
                     let window = app.get_window(MAIN_WINDOW_LABEL);
 
                     if let Some(window) = window {
@@ -76,8 +69,7 @@ fn main() {
                         }
                     }
                 }
-                _ => (),
-            },
+            }
             tauri::SystemTrayEvent::LeftClick { .. } => {
                 let window = app.get_window(MAIN_WINDOW_LABEL);
 
@@ -98,9 +90,9 @@ fn main() {
         .manage(settings_config)
         .on_window_event(move |event| match event.event() {
             tauri::WindowEvent::CloseRequested { api, .. } => {
-                let config_lock = window_config.app_config.blocking_lock();
+                let settings = tauri::async_runtime::block_on(window_config.get_settings());
 
-                if config_lock.hide_on_close {
+                if settings.minimize_on_close {
                     info!("Trying to prevent close");
                     api.prevent_close();
                     let hide_result = event.window().hide();
@@ -122,16 +114,15 @@ fn main() {
             get_settings
         ])
         .setup(move |app| {
-            let window = app.get_window(MAIN_WINDOW_LABEL).expect("To find main window");
+            let window = app
+                .get_window(MAIN_WINDOW_LABEL)
+                .expect("To find main window");
 
             if let Err(e) = set_shadow(&window, true) {
                 warn!("Could not set shadows: {}", e)
             }
 
-            tauri::async_runtime::spawn(start_accept(
-                mdns_sender.clone(),
-                server_handle.clone(),
-            ));
+            tauri::async_runtime::spawn(start_accept(mdns_sender.clone(), server_handle.clone()));
             tauri::async_runtime::spawn(start_mdns(
                 mdns_receiver,
                 server_handle.clone(),
@@ -149,6 +140,7 @@ fn main() {
                 network_receiver,
                 mdns_sender,
                 server_handle.clone(),
+                stored_data.clone(),
             ));
 
             tauri::async_runtime::spawn(save_config_loop(loop_config));

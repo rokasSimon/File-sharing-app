@@ -141,7 +141,7 @@ pub fn decode_protobuf(data: Vec<u8>) -> Result<Option<TcpMessage>, std::io::Err
             None => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("Received empty message"),
+                    "Received empty message".to_string(),
                 ))
             }
         },
@@ -170,10 +170,8 @@ pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
         _ => info!("Encoding {:?}", src),
     }
 
-    let msg = src.into();
-    let mut raw_msg = protobuf_types::TcpMessage::default();
-    raw_msg.message = Some(msg);
-    let enc = protobuf_types::TcpMessage::encode_to_vec(&raw_msg);
+    let msg = protobuf_types::TcpMessage { message: Some(src.into()) };
+    let enc = protobuf_types::TcpMessage::encode_to_vec(&msg);
 
     let len = enc.len() + LENGTH_MARKER_SIZE;
 
@@ -183,7 +181,7 @@ pub fn encode_protobuf(src: TcpMessage) -> Result<Vec<u8>, std::io::Error> {
 
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
-            format!("Message too large to encode"),
+            "Message too large to encode".to_string(),
         ));
     }
 

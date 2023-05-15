@@ -1,26 +1,21 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     net::{IpAddr, SocketAddr, SocketAddrV4},
     path::PathBuf,
     str::FromStr,
     sync::Arc,
-    time::Duration,
 };
 
 use anyhow::{anyhow, bail, Result};
 use chrono::{DateTime, Utc};
 use cryptohelpers::crc::compute_stream;
 use mdns_sd::ServiceInfo;
-use tauri::async_runtime::{JoinHandle, Mutex};
-use tokio::{
-    fs,
-    net::TcpStream,
-    sync::{mpsc, MutexGuard},
-};
+use tauri::async_runtime::JoinHandle;
+use tokio::{net::TcpStream, sync::mpsc};
 use uuid::Uuid;
 
 use crate::{
-    client::{client_loop, ClientData, DownloadError},
+    client::{client_loop, ClientData, DownloadError, MessageToClient},
     config::StoredConfig,
     data::{ContentLocation, PeerId, ShareDirectory, ShareDirectorySignature, SharedFile},
     mdns::MessageToMdns,
@@ -33,21 +28,18 @@ use crate::{
 pub type ClientConnectionId = IpAddr;
 
 const CHANNEL_SIZE: usize = 16;
-const UPDATE_PERIOD: u64 = 5;
 
 #[derive(Clone)]
 pub struct ServerHandle {
     pub channel: mpsc::Sender<MessageToServer>,
-    pub config: Arc<StoredConfig>,
     pub peer_id: PeerId,
 }
 
 pub struct ClientHandle {
     pub id: Option<PeerId>,
-    pub sender: mpsc::Sender<MessageFromServer>,
+    pub sender: mpsc::Sender<MessageToClient>,
     pub join: JoinHandle<()>,
     pub service_info: Option<ServiceInfo>,
-    pub job_queue: VecDeque<MessageFromServer>,
 }
 
 #[derive(Debug)]
@@ -56,6 +48,12 @@ pub enum MessageToServer {
     ServiceFound(ServiceInfo),
     ConnectionAccepted(TcpStream, SocketAddr),
     KillClient(ClientConnectionId),
+
+    LeftDirectory {
+        directory_identifier: Uuid,
+        peer_id: PeerId,
+        date_modified: DateTime<Utc>,
+    },
 
     SynchronizeDirectories(Vec<ShareDirectory>, PeerId),
     UpdatedDirectory(Uuid),
@@ -80,37 +78,6 @@ pub enum MessageToServer {
     SharedDirectory(ShareDirectory),
 }
 
-#[derive(Debug, Clone)]
-pub enum MessageFromServer {
-    GetPeerId,
-    Synchronize,
-
-    SendDirectories(Vec<ShareDirectory>),
-
-    AddedFiles(ShareDirectorySignature, Vec<SharedFile>),
-    DeleteFile(PeerId, ShareDirectorySignature, Uuid),
-
-    StartDownload {
-        download_id: Uuid,
-        file_identifier: Uuid,
-        directory_identifier: Uuid,
-        destination: PathBuf,
-    },
-    CancelDownload {
-        download_id: Uuid,
-    },
-    UpdateOwners {
-        peer_id: PeerId,
-        directory_identifier: Uuid,
-        file_identifier: Uuid,
-        date_modified: DateTime<Utc>,
-    },
-
-    LeftDirectory {
-        directory_identifier: Uuid,
-    },
-}
-
 struct ServerData<'a, M>
 where
     M: WindowManager,
@@ -119,18 +86,19 @@ where
     server_handle: &'a ServerHandle,
     clients: &'a mut HashMap<ClientConnectionId, ClientHandle>,
     mdns_sender: &'a mpsc::Sender<MessageToMdns>,
+    config: &'a Arc<StoredConfig>,
 }
 
 impl<M> ServerData<'_, M>
 where
     M: WindowManager,
 {
-    pub async fn broadcast(&self, peers: &Vec<PeerId>, msg: MessageFromServer) {
+    pub async fn broadcast(&self, peers: &[PeerId], msg: MessageToClient) {
         let found_clients: Vec<_> = self
             .clients
             .iter()
             .filter(|(_, c)| match &c.id {
-                Some(id) => peers.contains(&id),
+                Some(id) => peers.contains(id),
                 None => false,
             })
             .collect();
@@ -147,11 +115,11 @@ pub async fn server_loop<M>(
     mut window_receiver: mpsc::Receiver<WindowResponse>,
     mdns_sender: mpsc::Sender<MessageToMdns>,
     server_handle: ServerHandle,
+    config: Arc<StoredConfig>,
 ) where
     M: WindowManager,
 {
     let mut clients: HashMap<ClientConnectionId, ClientHandle> = HashMap::new();
-    let mut job_interval = tokio::time::interval(Duration::from_secs(UPDATE_PERIOD));
 
     loop {
         let server_data = ServerData {
@@ -159,6 +127,7 @@ pub async fn server_loop<M>(
             server_handle: &server_handle,
             clients: &mut clients,
             mdns_sender: &mdns_sender,
+            config: &config,
         };
 
         tokio::select! {
@@ -176,50 +145,14 @@ pub async fn server_loop<M>(
                     error!("{}", e);
                 }
             }
-            _ = job_interval.tick() => {
-                do_periodic_work(server_data).await;
-            }
         }
     }
 }
 
-async fn do_periodic_work<'a, M>(server_data: ServerData<'a, M>)
-where
-    M: WindowManager,
-{
-    let mut clients = server_data.clients;
-    let mut clients_to_remove = vec![];
-
-    for (key, value) in clients.iter_mut() {
-        if !value.job_queue.is_empty() {
-            let next_job = value.job_queue.pop_front();
-
-            if let Some(job) = next_job {
-                let send_result = value.sender.send(job.clone()).await;
-
-                if let Err(e) = send_result {
-                    error!(
-                    "Could not send value to client {} because {}. Client will be disconnected.",
-                    key, e
-                );
-                    value.job_queue.push_back(job);
-                    clients_to_remove.push(key.to_owned());
-                }
-            }
-        }
-    }
-
-    for client_key in clients_to_remove.iter() {
-        let removed = clients.remove(client_key);
-
-        match removed {
-            Some(client) => disconnected_client(client, server_data.mdns_sender).await,
-            None => (),
-        }
-    }
-}
-
-async fn handle_message<'a, M>(msg: MessageToServer, mut server_data: ServerData<'a, M>) -> Result<()>
+async fn handle_message<'a, M>(
+    msg: MessageToServer,
+    server_data: ServerData<'_, M>,
+) -> Result<()>
 where
     M: WindowManager,
 {
@@ -237,21 +170,22 @@ where
 
                         add_client(
                             server_data.server_handle.clone(),
-                            &mut server_data.clients,
+                            server_data.clients,
                             tcp_stream,
                             ipv4,
                             Some(service.clone()),
+                            server_data.config.clone(),
                         )
                         .await?;
 
-                        let _ = server_data
+                        server_data
                             .mdns_sender
                             .send(MessageToMdns::ConnectedService(service))
                             .await?;
 
-                        return Ok(());
+                        Ok(())
                     } else {
-                        let _ = server_data
+                        server_data
                             .mdns_sender
                             .send(MessageToMdns::ConnectedService(service))
                             .await?;
@@ -269,10 +203,11 @@ where
             if !server_data.clients.contains_key(&ip_addr) {
                 add_client(
                     server_data.server_handle.clone(),
-                    &mut server_data.clients,
+                    server_data.clients,
                     tcp,
                     ip_addr,
                     None,
+                    server_data.config.clone(),
                 )
                 .await?;
 
@@ -286,7 +221,7 @@ where
         }
 
         MessageToServer::SetPeerId(addr, id) => {
-            let mut clients = server_data.clients;
+            let clients = server_data.clients;
             let mut peer_ids: Vec<PeerId> =
                 clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
             let client = clients.get_mut(&addr);
@@ -299,7 +234,7 @@ where
                     let _ = server_data
                         .window_manager
                         .send(WindowRequest::GetPeers(peer_ids));
-                    let _ = client.sender.send(MessageFromServer::Synchronize).await?;
+                    client.sender.send(MessageToClient::Synchronize).await?;
 
                     Ok(())
                 }
@@ -308,7 +243,7 @@ where
         }
 
         MessageToServer::KillClient(client_addr) => {
-            let mut clients = server_data.clients;
+            let clients = server_data.clients;
             let mut peer_ids: Vec<PeerId> =
                 clients.iter().filter_map(|(_, c)| c.id.clone()).collect();
             let client = clients.remove(&client_addr);
@@ -336,24 +271,20 @@ where
         }
 
         MessageToServer::SharedDirectory(directory) => {
-            let mut directories = server_data.server_handle.config.cached_data.lock().await;
+            server_data
+                .config
+                .shared_directory(directory.clone())
+                .await?;
 
-            if !directories.contains_key(&directory.signature.identifier) {
-                directories.insert(directory.signature.identifier, directory.clone());
+            let _ = server_data
+                .window_manager
+                .send(WindowRequest::UpdateDirectory(directory));
 
-                let _ = server_data
-                    .window_manager
-                    .send(WindowRequest::UpdateDirectory(directory.clone()));
-
-                return Ok(());
-            }
-
-            Err(anyhow!("Directory was already shared"))
+            Ok(())
         }
 
         MessageToServer::SynchronizeDirectories(directories, peer) => {
-            let mut owned_dirs = server_data.server_handle.config.cached_data.lock().await;
-            let mut clients = server_data.clients;
+            let clients = server_data.clients;
             let myself = &server_data.server_handle.peer_id;
 
             let client = clients.iter_mut().find(|(_, cdata)| match &cdata.id {
@@ -363,64 +294,11 @@ where
 
             match client {
                 Some((_, _)) => {
-                    for dir in directories {
-                        let od = owned_dirs.get_mut(&dir.signature.identifier);
-
-                        match od {
-                            Some(matched_dir) => {
-                                if dir.signature.last_modified > matched_dir.signature.last_modified
-                                {
-                                    matched_dir.signature.shared_peers = dir.signature.shared_peers;
-
-                                    if !matched_dir.signature.shared_peers.contains(&myself) {
-                                        matched_dir
-                                            .signature
-                                            .shared_peers
-                                            .push(server_data.server_handle.peer_id.clone());
-                                    }
-
-                                    let mut files_to_delete = vec![];
-                                    for (file_id, file) in matched_dir.shared_files.iter_mut() {
-                                        if let None = dir.shared_files.get(file_id) {
-                                            if !file.owned_peers.contains(myself) {
-                                                files_to_delete.push(file_id.clone());
-                                            }
-                                        }
-                                    }
-
-                                    let mut files_to_add = vec![];
-                                    for (file_id, file) in dir.shared_files.iter() {
-                                        match matched_dir.shared_files.get_mut(file_id) {
-                                            None => files_to_add.push(file.clone()),
-                                            Some(matched_file) => {
-                                                matched_file.owned_peers = file.owned_peers.clone();
-                                            }
-                                        }
-                                    }
-
-                                    matched_dir
-                                        .shared_files
-                                        .retain(|file_id, _| !files_to_delete.contains(&file_id));
-
-                                    for file in files_to_add {
-                                        matched_dir.shared_files.insert(file.identifier, file);
-                                    }
-                                }
-                            }
-                            None => {
-                                owned_dirs.insert(dir.signature.identifier, dir);
-                            }
-                        }
-                    }
+                    let new_dirs = server_data.config.synchronize(directories, myself).await;
 
                     let _ = server_data
                         .window_manager
-                        .send(WindowRequest::UpdateShareDirectories(
-                            owned_dirs
-                                .values()
-                                .cloned()
-                                .collect::<Vec<ShareDirectory>>(),
-                        ));
+                        .send(WindowRequest::UpdateShareDirectories(new_dirs));
 
                     Ok(())
                 }
@@ -429,13 +307,12 @@ where
         }
 
         MessageToServer::UpdatedDirectory(directory_id) => {
-            let directories = server_data.server_handle.config.cached_data.lock().await;
-            let directory = directories.get(&directory_id);
+            let dir = server_data.config.get_directory(directory_id).await;
 
-            if let Some(dir) = directory {
+            if let Some(dir) = dir {
                 let _ = server_data
                     .window_manager
-                    .send(WindowRequest::UpdateDirectory(dir.clone()));
+                    .send(WindowRequest::UpdateDirectory(dir));
             }
 
             Ok(())
@@ -455,8 +332,7 @@ where
             file_identifier,
         } => {
             let myself = server_data.server_handle.peer_id.clone();
-            let mut directories = server_data.server_handle.config.cached_data.lock().await;
-            let directory = directories.get_mut(&directory_identifier);
+            let directory = server_data.config.get_directory(directory_identifier).await;
 
             match directory {
                 None => {
@@ -465,14 +341,12 @@ where
                         download_id,
                     });
                     let _ = server_data.window_manager.send(msg);
-
-                    Ok(())
                 }
                 Some(directory) => {
                     server_data
                         .broadcast(
                             &directory.signature.shared_peers,
-                            MessageFromServer::UpdateOwners {
+                            MessageToClient::UpdateOwners {
                                 peer_id: myself,
                                 directory_identifier,
                                 file_identifier,
@@ -483,18 +357,17 @@ where
 
                     let _ = server_data
                         .window_manager
-                        .send(WindowRequest::UpdateDirectory(directory.clone()));
-
+                        .send(WindowRequest::UpdateDirectory(directory));
                     let _ = server_data
                         .window_manager
                         .send(WindowRequest::DownloadUpdate(DownloadUpdate {
-                            download_id,
                             progress: 100,
+                            download_id,
                         }));
-
-                    Ok(())
                 }
             }
+
+            Ok(())
         }
 
         MessageToServer::DownloadUpdate {
@@ -524,17 +397,38 @@ where
 
             Ok(())
         }
+
+        MessageToServer::LeftDirectory {
+            directory_identifier,
+            peer_id,
+            date_modified,
+        } => {
+            server_data
+                .config
+                .mutate_dir(directory_identifier, |dir| {
+                    dir.remove_peer(&peer_id, date_modified);
+                })
+                .await;
+
+            let dir = server_data.config.get_directory(directory_identifier).await;
+
+            if let Some(dir) = dir {
+                let _ = server_data
+                    .window_manager
+                    .send(WindowRequest::UpdateDirectory(dir));
+            }
+
+            Ok(())
+        }
     }
 }
 
-async fn handle_request<'a, M>(msg: WindowResponse, server_data: ServerData<'a, M>) -> Result<()>
+async fn handle_request<M>(msg: WindowResponse, server_data: ServerData<'_, M>) -> Result<()>
 where
     M: WindowManager,
 {
     match msg {
         WindowResponse::CreateShareDirectory(name) => {
-            let mut data = server_data.server_handle.config.cached_data.lock().await;
-
             let id = Uuid::new_v4();
             let signature = ShareDirectorySignature {
                 name,
@@ -547,7 +441,8 @@ where
                 shared_files: HashMap::new(),
             };
 
-            data.insert(id, sd);
+            server_data.config.add_directory(sd).await;
+
             let _ = server_data
                 .window_manager
                 .send(WindowRequest::NewShareDirectory(signature));
@@ -568,13 +463,11 @@ where
         }
 
         WindowResponse::GetAllShareDirectoryData(_) => {
-            let data = server_data.server_handle.config.cached_data.lock().await;
-
-            let values: Vec<ShareDirectory> = data.values().cloned().collect();
-
             let _ = server_data
                 .window_manager
-                .send(WindowRequest::UpdateShareDirectories(values));
+                .send(WindowRequest::UpdateShareDirectories(
+                    server_data.config.get_directories().await,
+                ));
 
             Ok(())
         }
@@ -582,9 +475,8 @@ where
         WindowResponse::LeaveDirectory {
             directory_identifier,
         } => {
-            let mut directories = server_data.server_handle.config.cached_data.lock().await;
             let dir_id = Uuid::parse_str(&directory_identifier)?;
-            let directory = directories.remove(&dir_id);
+            let directory = server_data.config.remove_directory(dir_id).await;
             let directory = match directory {
                 None => {
                     return Err(anyhow!(
@@ -597,20 +489,17 @@ where
             server_data
                 .broadcast(
                     &directory.signature.shared_peers,
-                    MessageFromServer::LeftDirectory {
+                    MessageToClient::LeftDirectory {
                         directory_identifier: dir_id,
                     },
                 )
                 .await;
 
-            let directories_data = directories
-                .values()
-                .cloned()
-                .collect::<Vec<ShareDirectory>>();
-
             let _ = server_data
                 .window_manager
-                .send(WindowRequest::UpdateShareDirectories(directories_data));
+                .send(WindowRequest::UpdateShareDirectories(
+                    server_data.config.get_directories().await,
+                ));
 
             Ok(())
         }
@@ -619,64 +508,72 @@ where
             file_paths,
             directory_identifier,
         } => {
-            let mut directories = server_data.server_handle.config.cached_data.lock().await;
             let id = Uuid::from_str(&directory_identifier)?;
-            let directory = directories.get_mut(&id);
+            let mut shared_files = vec![];
+            for file_path in file_paths {
+                let shared_file =
+                    create_shared_file(file_path, &server_data.server_handle.peer_id).await?;
 
-            if let Some(dir) = directory {
-                let mut shared_files = vec![];
-                for file_path in file_paths {
-                    let shared_file =
-                        create_shared_file(file_path, &server_data.server_handle.peer_id).await?;
-
-                    shared_files.push(shared_file);
-                }
-
-                let add_result = dir.add_files(shared_files.clone(), Utc::now());
-
-                if let Err(_) = add_result {
-                    let _ = server_data
-                        .window_manager
-                        .send(WindowRequest::Error(BackendError {
-                            title: "File Error".to_owned(),
-                            error: "File has already been added to this directory".to_owned(),
-                        }));
-
-                    return Ok(());
-                }
-
-                let _ = server_data
-                    .window_manager
-                    .send(WindowRequest::UpdateDirectory(dir.clone()));
-
-                server_data
-                    .broadcast(
-                        &dir.signature.shared_peers,
-                        MessageFromServer::AddedFiles(dir.signature.clone(), shared_files),
-                    )
-                    .await;
-
-                return Ok(());
+                shared_files.push(shared_file);
             }
 
-            Err(anyhow!("Directory not found"))
+            let mut signature = None;
+            server_data
+                .config
+                .mutate_dir(id, |directory| {
+                    let add_result = directory.add_files(shared_files.clone(), Utc::now());
+
+                    if let Ok(()) = add_result {
+                        let _ = server_data
+                            .window_manager
+                            .send(WindowRequest::UpdateDirectory(directory.clone()));
+
+                        signature = Some(directory.signature.clone());
+                    }
+                })
+                .await;
+
+            if let Some(signature) = signature {
+                server_data
+                    .broadcast(
+                        &signature.shared_peers,
+                        MessageToClient::AddedFiles(signature.clone(), shared_files),
+                    )
+                    .await;
+            } else {
+                let _ = server_data
+                    .window_manager
+                    .send(WindowRequest::Error(BackendError {
+                        title: "File Error".to_owned(),
+                        error: "File has already been added to this directory".to_owned(),
+                    }));
+            }
+
+            Ok(())
         }
 
         WindowResponse::ShareDirectoryToPeers {
             peers,
             directory_identifier,
         } => {
-            let mut directories = server_data.server_handle.config.cached_data.lock().await;
             let id = Uuid::from_str(&directory_identifier)?;
-            let directory = directories.get_mut(&id);
+            let mut success = false;
+            server_data
+                .config
+                .mutate_dir(id, |dir| {
+                    dir.add_peers(peers, Utc::now());
 
-            if let Some(dir) = directory {
-                dir.signature.shared_peers.extend(peers);
+                    success = true;
+                })
+                .await;
+
+            if success {
+                let dir = server_data.config.get_directory(id).await.unwrap();
 
                 server_data
                     .broadcast(
                         &dir.signature.shared_peers,
-                        MessageFromServer::SendDirectories(vec![dir.clone()]),
+                        MessageToClient::SendDirectories(vec![dir.clone()]),
                     )
                     .await;
 
@@ -694,44 +591,58 @@ where
             directory_identifier,
             file_identifier,
         } => {
-            let mut directories = server_data.server_handle.config.cached_data.lock().await;
             let dir_id = Uuid::from_str(&directory_identifier)?;
             let file_id = Uuid::from_str(&file_identifier)?;
 
-            let directory = directories.get_mut(&dir_id);
-            if let Some(dir) = directory {
-                let file = dir.shared_files.get_mut(&file_id);
-                if let Some(file) = file {
-                    match &file.content_location {
-                        ContentLocation::LocalPath(path) => {
-                            if path.exists() {
-                                fs::remove_file(path).await?;
-                            }
+            let mut success_delete = false;
+            server_data
+                .config
+                .mutate_file(dir_id, file_id, |file| {
+                    if let ContentLocation::LocalPath(path) = &file.content_location {
+                        if path.exists() {
+                            let _ = std::fs::remove_file(path);
                         }
-                        _ => (),
                     }
 
                     file.content_location = ContentLocation::NetworkOnly;
-                    dir.remove_files(
-                        &server_data.server_handle.peer_id,
-                        Utc::now(),
-                        vec![file_id.clone()],
-                    );
+                    success_delete = true;
+                })
+                .await;
 
-                    server_data
-                        .broadcast(
-                            &dir.signature.shared_peers,
-                            MessageFromServer::DeleteFile(
-                                server_data.server_handle.peer_id.clone(),
-                                dir.signature.clone(),
-                                file_id.clone(),
-                            ),
-                        )
-                        .await;
+            if success_delete {
+                let mut success_remove = false;
+                server_data
+                    .config
+                    .mutate_dir(dir_id, |dir| {
+                        dir.remove_files(
+                            &server_data.server_handle.peer_id,
+                            Utc::now(),
+                            vec![file_id],
+                        );
 
-                    let _ = server_data
-                        .window_manager
-                        .send(WindowRequest::UpdateDirectory(dir.clone()));
+                        success_remove = true;
+                    })
+                    .await;
+
+                if success_remove {
+                    let dir = server_data.config.get_directory(dir_id).await;
+
+                    if let Some(dir) = dir {
+                        server_data
+                            .broadcast(
+                                &dir.signature.shared_peers,
+                                MessageToClient::DeleteFile(
+                                    server_data.server_handle.peer_id.clone(),
+                                    dir.signature.clone(),
+                                    file_id
+                                ),
+                            )
+                            .await;
+
+                        let _ = server_data
+                            .window_manager
+                            .send(WindowRequest::UpdateDirectory(dir.clone()));
+                    }
                 }
             }
 
@@ -742,24 +653,22 @@ where
             directory_identifier,
             file_identifier,
         } => {
-            let directories = server_data.server_handle.config.cached_data.lock().await;
             let dir_id = Uuid::parse_str(&directory_identifier)?;
             let file_id = Uuid::parse_str(&file_identifier)?;
 
-            let files = get_file(&*directories, dir_id, file_id);
-            let result = match files {
+            let owners = server_data.config.get_owners(dir_id, file_id).await;
+            let result = match owners {
                 None => {
-                    error!("Directory missing {}", dir_id);
-                    Err(DownloadError::DirectoryMissing)
+                    error!("File missing {}", file_id);
+                    Err(DownloadError::FileMissing)
                 }
-                Some((_, file)) => {
-                    let mut clients = server_data.clients;
-                    let client = clients.iter_mut().find(|(_, c)| {
+                Some(owners) => {
+                    let client = server_data.clients.iter().find(|(_, c)| {
                         if let Some(id) = &c.id {
-                            return file.owned_peers.contains(id);
+                            return owners.contains(id);
                         }
 
-                        return false;
+                        false
                     });
 
                     match client {
@@ -769,40 +678,45 @@ where
                         }
                         Some((_, c)) => {
                             let download_id = Uuid::new_v4();
-                            let app_config =
-                                server_data.server_handle.config.app_config.lock().await;
+                            let download_path = server_data
+                                .config
+                                .generate_filepath(dir_id, file_id, download_id)
+                                .await;
 
-                            let download_directory = app_config.download_directory.clone();
-                            let file_path = download_directory.join(&file.name);
-                            let file_path = if file_path.exists() {
-                                file_path.join(download_id.to_string())
-                            } else {
-                                file_path
-                            };
+                            match download_path {
+                                None => {
+                                    error!("File missing {}", file_id);
+                                    Err(DownloadError::FileMissing)
+                                }
+                                Some(path) => {
+                                    c
+                                        .sender
+                                        .send(MessageToClient::StartDownload {
+                                            download_id,
+                                            file_identifier: file_id,
+                                            directory_identifier: dir_id,
+                                            destination: path,
+                                        })
+                                        .await?;
 
-                            let _ = c
-                                .sender
-                                .send(MessageFromServer::StartDownload {
-                                    download_id,
-                                    file_identifier: file_id,
-                                    directory_identifier: dir_id,
-                                    destination: file_path,
-                                })
-                                .await?;
-
-                            Ok(())
+                                    Ok(())
+                                }
+                            }
                         }
                     }
                 }
             };
 
-            // if let Err(e) = result {
-            //     error!("{}", e);
+            if let Err(e) = result {
+                error!("{}", e);
 
-            //     let _ = server_data.window_manager.send(WindowRequest::DownloadCanceled(DownloadNotStarted {
-            //         reason: e.to_string(),
-            //     }));
-            // }
+                let _ = server_data
+                    .window_manager
+                    .send(WindowRequest::Error(BackendError {
+                        error: e.to_string(),
+                        title: "Could not start download".to_string(),
+                    }));
+            }
 
             Ok(())
         }
@@ -814,7 +728,7 @@ where
             let download_id = Uuid::parse_str(&download_identifier)?;
             let peers = vec![peer];
             server_data
-                .broadcast(&peers, MessageFromServer::CancelDownload { download_id })
+                .broadcast(&peers, MessageToClient::CancelDownload { download_id })
                 .await;
 
             let _ = server_data
@@ -835,6 +749,7 @@ async fn add_client<'a>(
     tcp: TcpStream,
     addr: ClientConnectionId,
     service_info: Option<ServiceInfo>,
+    config: Arc<StoredConfig>,
 ) -> Result<()> {
     info!("Adding client with address {}", addr);
 
@@ -844,6 +759,7 @@ async fn add_client<'a>(
         server: server_handle,
         receiver,
         addr,
+        config,
     };
 
     let pid = match &service_info {
@@ -856,19 +772,12 @@ async fn add_client<'a>(
     };
 
     let join = tauri::async_runtime::spawn(client_loop(client_data, tcp, pid.clone()));
-    let mut job_queue = VecDeque::new();
-
-    if pid.is_none() {
-        job_queue.push_back(MessageFromServer::GetPeerId);
-    }
-    job_queue.push_back(MessageFromServer::Synchronize);
 
     let client = ClientHandle {
-        id: pid.clone(),
+        id: pid,
         sender,
         join,
         service_info,
-        job_queue,
     };
 
     let _ = clients.insert(addr, client);
@@ -913,26 +822,6 @@ async fn create_shared_file(file_path: String, this_peer: &PeerId) -> Result<Sha
         owned_peers: vec![this_peer.clone()],
         size,
     })
-}
-
-fn get_file(
-    directories: &HashMap<Uuid, ShareDirectory>,
-    dir_id: Uuid,
-    file_id: Uuid,
-) -> Option<(&ShareDirectory, &SharedFile)> {
-    let directory = directories.get(&dir_id);
-
-    match directory {
-        None => None,
-        Some(directory) => {
-            let file = directory.shared_files.get(&file_id);
-
-            match file {
-                None => None,
-                Some(file) => Some((directory, file)),
-            }
-        }
-    }
 }
 
 #[cfg(tests)]

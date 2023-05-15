@@ -231,7 +231,7 @@ impl TryFrom<protobuf_types::Uuid> for Uuid {
         match Uuid::from_slice(&value.data[..]) {
             Err(_) => Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Could not parse UUID"),
+                "Could not parse UUID".to_string(),
             )),
             Ok(id) => Ok(id),
         }
@@ -258,7 +258,7 @@ impl TryFrom<protobuf_types::DateTime> for DateTime<Utc> {
         match DateTime::<Utc>::from_str(&value.date) {
             Err(_) => Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("Invalid date time string"),
+                "Invalid date time string".to_string(),
             )),
             Ok(date) => Ok(date),
         }
@@ -323,7 +323,7 @@ impl TryFrom<protobuf_types::ShareDirectory> for ShareDirectory {
                 Err(_) => {
                     return Err(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
-                        format!("Invalid date time string"),
+                        "Invalid date time string".to_string(),
                     ))
                 }
                 Ok(id) => id,

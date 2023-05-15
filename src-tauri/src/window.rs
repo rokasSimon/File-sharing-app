@@ -90,23 +90,6 @@ pub enum WindowRequest {
     DownloadCanceled(DownloadCanceled),
 }
 
-// impl Serialize for WindowRequest {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer {
-//             match self {
-//                 Self::UpdateDirectory(dir) => serializer.serialize_newtype_variant(name, variant_index, variant, value) //serde_json::to_string(dir).unwrap(),
-//                 Self::UpdateShareDirectories(dirs) => serde_json::to_string(dirs).unwrap(),
-//                 Self::GetPeers(peers) => serde_json::to_string(peers).unwrap(),
-//                 Self::NewShareDirectory(new_dir) => serde_json::to_string(new_dir).unwrap(),
-//                 Self::Error(err) => serde_json::to_string(err).unwrap(),
-//                 Self::DownloadStarted(download) => serde_json::to_string(download).unwrap(),
-//                 Self::DownloadUpdate(update) => serde_json::to_string(update).unwrap(),
-//                 Self::DownloadCanceled(cancel) => serde_json::to_string(cancel).unwrap(),
-//             }
-//     }
-// }
-
 impl WindowRequest {
     pub fn to_string(&self) -> &'static str {
         match self {
@@ -120,19 +103,6 @@ impl WindowRequest {
             Self::DownloadCanceled(_) => "DownloadCanceled",
         }
     }
-
-    // pub fn get_payload(&self) -> Box<dyn Serialize> {
-    //     match self {
-    //         Self::UpdateDirectory(dir) => serde_json::to_string(dir).unwrap(),
-    //         Self::UpdateShareDirectories(dirs) => serde_json::to_string(dirs).unwrap(),
-    //         Self::GetPeers(peers) => serde_json::to_string(peers).unwrap(),
-    //         Self::NewShareDirectory(new_dir) => serde_json::to_string(new_dir).unwrap(),
-    //         Self::Error(err) => serde_json::to_string(err).unwrap(),
-    //         Self::DownloadStarted(download) => serde_json::to_string(download).unwrap(),
-    //         Self::DownloadUpdate(update) => serde_json::to_string(update).unwrap(),
-    //         Self::DownloadCanceled(cancel) => serde_json::to_string(cancel).unwrap(),
-    //     }
-    // }
 }
 
 pub trait WindowManager {
