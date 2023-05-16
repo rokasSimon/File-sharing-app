@@ -427,7 +427,7 @@ async fn handle_tcp_message<'a>(
         } => {
             info!("Received delete request for file {}", file);
 
-            let success = false;
+            let mut success = false;
             data.client_data
                 .config
                 .mutate_dir(directory.identifier, |dir| {
