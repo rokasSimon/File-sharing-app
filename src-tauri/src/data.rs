@@ -189,7 +189,7 @@ impl Display for PeerId {
     }
 }
 
-//#[cfg(tests)]
+#[cfg(tests)]
 mod tests {
 
     mod peer_id_tests {
