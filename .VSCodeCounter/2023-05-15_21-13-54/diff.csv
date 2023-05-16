@@ -1,0 +1,28 @@
+"filename", "language", "TypeScript JSX", "Rust", "Protocol Buffers", "TOML", "YAML", "comment", "blank", "total"
+"e:\DEV\Rust\file-sharing-app\.github\workflows\main.yml", "YAML", 0, 0, 0, 0, 38, 0, 3, 41
+"e:\DEV\Rust\file-sharing-app\src-tauri\Cargo.toml", "TOML", 0, 0, 0, 1, 0, 0, 0, 1
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\client.rs", "Rust", 0, 772, 0, 0, 0, 0, 149, 921
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\client\codec.rs", "Rust", 0, 151, 0, 0, 0, 1, 40, 192
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\client\protobuf.rs", "Rust", 0, 468, 0, 0, 0, 0, 89, 557
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\client\tcpMessages.proto", "Protocol Buffers", 0, 0, 115, 0, 0, 0, 23, 138
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\config.rs", "Rust", 0, 169, 0, 0, 0, 0, 41, 210
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\data.rs", "Rust", 0, 48, 0, 0, 0, -1, 13, 60
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\lib.rs", "Rust", 0, 0, 0, 0, 0, 0, -1, -1
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\listen.rs", "Rust", 0, 51, 0, 0, 0, 0, 10, 61
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\main.rs", "Rust", 0, -14, 0, 0, 0, 0, -3, -17
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\mdns.rs", "Rust", 0, 130, 0, 0, 0, 0, 24, 154
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network.rs", "Rust", 0, -46, 0, 0, 0, 0, -11, -57
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\client.rs", "Rust", 0, -827, 0, 0, 0, 0, -159, -986
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec.rs", "Rust", 0, -154, 0, 0, 0, -1, -41, -196
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec\protobuf_map.rs", "Rust", 0, -471, 0, 0, 0, 0, -88, -559
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec\tcpMessages.proto", "Protocol Buffers", 0, 0, -115, 0, 0, 0, -23, -138
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\mdns.rs", "Rust", 0, -148, 0, 0, 0, 0, -29, -177
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server.rs", "Rust", 0, -879, 0, 0, 0, -14, -157, -1050
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\network\tcp_listener.rs", "Rust", 0, -21, 0, 0, 0, 0, -8, -29
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\peer_id.rs", "Rust", 0, -38, 0, 0, 0, 0, -13, -51
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\server.rs", "Rust", 0, 793, 0, 0, 0, 1, 147, 941
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\window.rs", "Rust", 0, 40, 0, 0, 0, 0, -3, 37
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\window\commands.rs", "Rust", 0, 51, 0, 0, 0, 0, 16, 67
+"e:\DEV\Rust\file-sharing-app\src\RustCommands\ShareDirectoryContext.tsx", "TypeScript JSX", 1, 0, 0, 0, 0, 0, 0, 1
+"e:\DEV\Rust\file-sharing-app\src\pages\Settings.tsx", "TypeScript JSX", 0, 0, 0, 0, 0, -34, -7, -41
+"Total", "-", 1, 75, 0, 1, 38, -48, 12, 79

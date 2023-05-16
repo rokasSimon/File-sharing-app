@@ -1,0 +1,68 @@
+Date : 2023-05-15 21:13:54
+Directory : e:\DEV\Rust\file-sharing-app
+Total : 26 files,  115 codes, -48 comments, 12 blanks, all 79 lines
+
+Languages
++------------------+------------+------------+------------+------------+------------+
+| language         | files      | code       | comment    | blank      | total      |
++------------------+------------+------------+------------+------------+------------+
+| Rust             |         20 |         75 |        -14 |         16 |         77 |
+| YAML             |          1 |         38 |          0 |          3 |         41 |
+| TypeScript JSX   |          2 |          1 |        -34 |         -7 |        -40 |
+| TOML             |          1 |          1 |          0 |          0 |          1 |
+| Protocol Buffers |          2 |          0 |          0 |          0 |          0 |
++------------------+------------+------------+------------+------------+------------+
+
+Directories
++----------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                       | files      | code       | comment    | blank      | total      |
++----------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                          |         26 |        115 |        -48 |         12 |         79 |
+| .github                                                                    |          1 |         38 |          0 |          3 |         41 |
+| .github\workflows                                                          |          1 |         38 |          0 |          3 |         41 |
+| src                                                                        |          2 |          1 |        -34 |         -7 |        -40 |
+| src-tauri                                                                  |         23 |         76 |        -14 |         16 |         78 |
+| src-tauri (Files)                                                          |          1 |          1 |          0 |          0 |          1 |
+| src-tauri\src                                                              |         22 |         75 |        -14 |         16 |         77 |
+| src-tauri\src (Files)                                                      |         11 |      1,905 |          0 |        353 |      2,258 |
+| src-tauri\src\client                                                       |          3 |        734 |          1 |        152 |        887 |
+| src-tauri\src\network                                                      |          7 |     -2,615 |        -15 |       -505 |     -3,135 |
+| src-tauri\src\network (Files)                                              |          5 |     -2,029 |        -15 |       -394 |     -2,438 |
+| src-tauri\src\network\codec                                                |          2 |       -586 |          0 |       -111 |       -697 |
+| src-tauri\src\window                                                       |          1 |         51 |          0 |         16 |         67 |
+| src\RustCommands                                                           |          1 |          1 |          0 |          0 |          1 |
+| src\pages                                                                  |          1 |          0 |        -34 |         -7 |        -41 |
++----------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++----------------------------------------------------------------------------+------------------+------------+------------+------------+------------+
+| filename                                                                   | language         | code       | comment    | blank      | total      |
++----------------------------------------------------------------------------+------------------+------------+------------+------------+------------+
+| e:\DEV\Rust\file-sharing-app\.github\workflows\main.yml                    | YAML             |         38 |          0 |          3 |         41 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\Cargo.toml                          | TOML             |          1 |          0 |          0 |          1 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\client.rs                       | Rust             |        772 |          0 |        149 |        921 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\client\codec.rs                 | Rust             |        151 |          1 |         40 |        192 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\client\protobuf.rs              | Rust             |        468 |          0 |         89 |        557 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\client\tcpMessages.proto        | Protocol Buffers |        115 |          0 |         23 |        138 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\config.rs                       | Rust             |        169 |          0 |         41 |        210 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\data.rs                         | Rust             |         48 |         -1 |         13 |         60 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\lib.rs                          | Rust             |          0 |          0 |         -1 |         -1 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\listen.rs                       | Rust             |         51 |          0 |         10 |         61 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\main.rs                         | Rust             |        -14 |          0 |         -3 |        -17 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\mdns.rs                         | Rust             |        130 |          0 |         24 |        154 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network.rs                      | Rust             |        -46 |          0 |        -11 |        -57 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\client.rs               | Rust             |       -827 |          0 |       -159 |       -986 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec.rs                | Rust             |       -154 |         -1 |        -41 |       -196 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec\protobuf_map.rs   | Rust             |       -471 |          0 |        -88 |       -559 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\codec\tcpMessages.proto | Protocol Buffers |       -115 |          0 |        -23 |       -138 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\mdns.rs                 | Rust             |       -148 |          0 |        -29 |       -177 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\server.rs               | Rust             |       -879 |        -14 |       -157 |     -1,050 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\network\tcp_listener.rs         | Rust             |        -21 |          0 |         -8 |        -29 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\peer_id.rs                      | Rust             |        -38 |          0 |        -13 |        -51 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\server.rs                       | Rust             |        793 |          1 |        147 |        941 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\window.rs                       | Rust             |         40 |          0 |         -3 |         37 |
+| e:\DEV\Rust\file-sharing-app\src-tauri\src\window\commands.rs              | Rust             |         51 |          0 |         16 |         67 |
+| e:\DEV\Rust\file-sharing-app\src\RustCommands\ShareDirectoryContext.tsx    | TypeScript JSX   |          1 |          0 |          0 |          1 |
+| e:\DEV\Rust\file-sharing-app\src\pages\Settings.tsx                        | TypeScript JSX   |          0 |        -34 |         -7 |        -41 |
+| Total                                                                      |                  |        115 |        -48 |         12 |         79 |
++----------------------------------------------------------------------------+------------------+------------+------------+------------+------------+

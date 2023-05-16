@@ -432,6 +432,8 @@ async fn handle_tcp_message<'a>(
                 .config
                 .mutate_dir(directory.identifier, |dir| {
                     dir.remove_files(&peer_id, directory.last_modified, vec![file]);
+
+                    success = true;
                 })
                 .await;
 

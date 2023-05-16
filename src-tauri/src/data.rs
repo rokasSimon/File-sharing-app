@@ -189,307 +189,407 @@ impl Display for PeerId {
     }
 }
 
-#[cfg(tests)]
+//#[cfg(tests)]
 mod tests {
 
-    use std::collections::HashMap;
+    mod peer_id_tests {
+        use uuid::Uuid;
 
-    use chrono::Utc;
-    use uuid::Uuid;
+        use crate::data::PeerId;
 
-    use crate::peer_id::PeerId;
+        #[test]
+        fn parse_given_valid_peer_id_returns_some() {
+            let expected_peer_id = PeerId {
+                uuid: Uuid::nil(),
+                hostname: "test".to_string()
+            };
+            let valid_peer_id_str = "test;00000000-0000-0000-0000-000000000000";
 
-    use super::{ShareDirectory, ShareDirectorySignature, SharedFile};
+            let parsed = PeerId::parse(valid_peer_id_str);
 
-    const HOSTNAME: &str = "test";
-    const PEER_UUID: Uuid = Uuid::nil();
-
-    fn setup() -> ShareDirectory {
-        let now = Utc::now();
-        let peer = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-
-        let signature = ShareDirectorySignature {
-            name: "test".to_string(),
-            identifier: Uuid::new_v4(),
-            last_modified: now,
-            shared_peers: vec![peer.clone()],
-        };
-
-        let shared_file = SharedFile {
-            name: "test file".to_string(),
-            identifier: Uuid::nil(),
-            content_hash: 0,
-            last_modified: now,
-            content_location: super::ContentLocation::NetworkOnly,
-            owned_peers: vec![peer],
-            size: 0,
-        };
-
-        let shared_files = HashMap::from([(Uuid::nil(), shared_file)]);
-
-        ShareDirectory {
-            signature,
-            shared_files,
+            assert!(parsed.is_some());
+            assert_eq!(parsed.unwrap(), expected_peer_id);
         }
+
+        #[test]
+        fn parse_given_invalid_peer_id_returns_none() {
+            let invalid_peer_id_str = "test;00000000--000000000000";
+
+            let parsed = PeerId::parse(invalid_peer_id_str);
+
+            assert!(parsed.is_none());
+        }
+
+        #[test]
+        fn to_string_returns_correct_format() {
+            let peer_id = PeerId {
+                uuid: Uuid::nil(),
+                hostname: "test".to_string()
+            };
+
+            let string = peer_id.to_string();
+
+            assert_eq!(string, "test;00000000-0000-0000-0000-000000000000");
+        }
+
     }
 
-    #[test]
-    fn add_owner_should_contain_new_peer_id() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let peer_id_bytes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
-        let new_peer = PeerId {
-            hostname: "owner".to_string(),
-            uuid: Uuid::from_bytes(peer_id_bytes),
+    mod directory_tests {
+
+        use std::{collections::HashMap, path::PathBuf, str::FromStr};
+
+        use chrono::Utc;
+        use uuid::Uuid;
+
+        use crate::data::{
+            ContentLocation, PeerId, ShareDirectory, ShareDirectorySignature, SharedFile,
         };
-        let file_ids = vec![Uuid::nil()];
 
-        directory.add_owner(new_peer.clone(), mod_date, file_ids);
+        const HOSTNAME: &str = "test";
+        const PEER_UUID: Uuid = Uuid::nil();
 
-        assert!(directory.signature.last_modified == mod_date);
-        assert!(directory
-            .shared_files
-            .get(&Uuid::nil())
-            .unwrap()
-            .owned_peers
-            .contains(&new_peer));
-    }
+        fn setup() -> ShareDirectory {
+            let now = Utc::now();
+            let peer = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
 
-    #[test]
-    fn add_owner_should_not_add_twice() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let new_peer = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-        let file_ids = vec![Uuid::nil()];
+            let signature = ShareDirectorySignature {
+                name: "test".to_string(),
+                identifier: Uuid::new_v4(),
+                last_modified: now,
+                shared_peers: vec![peer.clone()],
+            };
 
-        directory.add_owner(new_peer.clone(), mod_date, file_ids);
+            let shared_file = SharedFile {
+                name: "test file".to_string(),
+                identifier: Uuid::nil(),
+                content_hash: 0,
+                last_modified: now,
+                content_location: ContentLocation::NetworkOnly,
+                owned_peers: vec![peer],
+                size: 0,
+            };
 
-        assert!(directory.signature.last_modified == mod_date);
-        assert_eq!(
-            directory
+            let shared_files = HashMap::from([(Uuid::nil(), shared_file)]);
+
+            ShareDirectory {
+                signature,
+                shared_files,
+            }
+        }
+
+        #[test]
+        fn add_owner_should_contain_new_peer_id() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let peer_id_bytes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+            let new_peer = PeerId {
+                hostname: "owner".to_string(),
+                uuid: Uuid::from_bytes(peer_id_bytes),
+            };
+            let file_ids = vec![Uuid::nil()];
+
+            directory.add_owner(&new_peer, mod_date, file_ids, None);
+
+            assert!(directory.signature.last_modified == mod_date);
+            assert!(directory
                 .shared_files
                 .get(&Uuid::nil())
                 .unwrap()
                 .owned_peers
-                .len(),
-            1
-        );
-    }
+                .contains(&new_peer));
+        }
 
-    #[test]
-    fn add_files_should_contain_new_file() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let myself = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-        let file_id = Uuid::from_bytes([1; 16]);
-        let files = vec![SharedFile {
-            name: "file 1".to_string(),
-            identifier: file_id,
-            content_hash: 1,
-            last_modified: mod_date,
-            content_location: crate::data::ContentLocation::NetworkOnly,
-            owned_peers: vec![myself],
-            size: 1,
-        }];
+        #[test]
+        fn add_owner_should_not_add_twice() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let new_peer = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let file_ids = vec![Uuid::nil()];
 
-        let result = directory.add_files(files, mod_date);
+            directory.add_owner(&new_peer, mod_date, file_ids, None);
 
-        assert!(directory.signature.last_modified == mod_date);
-        assert_eq!(directory.shared_files.len(), 2);
-        assert_eq!(directory.shared_files.get(&file_id).unwrap().name, "file 1");
-        assert!(result.is_ok());
-    }
+            assert!(directory.signature.last_modified == mod_date);
+            assert_eq!(
+                directory
+                    .shared_files
+                    .get(&Uuid::nil())
+                    .unwrap()
+                    .owned_peers
+                    .len(),
+                1
+            );
+        }
 
-    #[test]
-    fn add_files_should_return_error_when_identifier_already_exists() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let myself = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-        let file_id = Uuid::nil();
-        let files = vec![SharedFile {
-            name: "file 1".to_string(),
-            identifier: file_id,
-            content_hash: 1,
-            last_modified: mod_date,
-            content_location: crate::data::ContentLocation::NetworkOnly,
-            owned_peers: vec![myself],
-            size: 1,
-        }];
+        #[test]
+        fn add_owner_should_contain_new_peer_id_and_local_path() {
+            let expected_path_buf = PathBuf::from_str("C:\\").unwrap();
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let peer_id_bytes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+            let new_peer = PeerId {
+                hostname: "owner".to_string(),
+                uuid: Uuid::from_bytes(peer_id_bytes),
+            };
+            let file_ids = vec![Uuid::nil()];
 
-        let result = directory.add_files(files, mod_date);
+            directory.add_owner(
+                &new_peer,
+                mod_date,
+                file_ids,
+                Some(expected_path_buf.clone()),
+            );
 
-        assert!(directory.signature.last_modified != mod_date);
-        assert_eq!(directory.shared_files.len(), 1);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn add_files_should_return_error_when_file_with_same_content_hash_exists() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let myself = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-        let file_id = Uuid::from_bytes([1; 16]);
-        let files = vec![SharedFile {
-            name: "file 2".to_string(),
-            identifier: file_id,
-            content_hash: 0,
-            last_modified: mod_date,
-            content_location: crate::data::ContentLocation::NetworkOnly,
-            owned_peers: vec![myself],
-            size: 1,
-        }];
-
-        let result = directory.add_files(files, mod_date);
-
-        assert!(directory.signature.last_modified != mod_date);
-        assert_eq!(directory.shared_files.len(), 1);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn remove_files_no_files_should_remain() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let myself = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-        let file_id = Uuid::nil();
-
-        directory.remove_files(&myself, mod_date, vec![file_id]);
-
-        assert!(directory.signature.last_modified == mod_date);
-        assert_eq!(directory.shared_files.len(), 0);
-    }
-
-    #[test]
-    fn remove_files_file_should_remain_with_fewer_owners() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let myself = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-        let file_id = Uuid::nil();
-        let new_peer = PeerId {
-            hostname: "test 2".to_string(),
-            uuid: Uuid::from_bytes([1; 16]),
-        };
-        directory
-            .shared_files
-            .get_mut(&Uuid::nil())
-            .unwrap()
-            .owned_peers
-            .push(new_peer.clone());
-
-        directory.remove_files(&myself, mod_date, vec![file_id]);
-
-        assert!(directory.signature.last_modified == mod_date);
-        assert_eq!(directory.shared_files.len(), 1);
-        assert_eq!(
-            directory
-                .shared_files
-                .get(&file_id)
-                .unwrap()
-                .owned_peers
-                .get(0)
-                .unwrap(),
-            &new_peer
-        );
-    }
-
-    #[test]
-    fn remove_peer_no_files_should_remain() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let myself = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-
-        directory.remove_peer(&myself, mod_date);
-
-        assert!(directory.signature.last_modified == mod_date);
-        assert_eq!(directory.shared_files.len(), 0);
-    }
-
-    #[test]
-    fn remove_peer_single_file_should_remain() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let myself = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-        let new_peer = PeerId {
-            hostname: "test 2".to_owned(),
-            uuid: Uuid::from_bytes([1; 16]),
-        };
-        directory.signature.shared_peers.push(new_peer.clone());
-        directory
-            .shared_files
-            .get_mut(&Uuid::nil())
-            .unwrap()
-            .owned_peers
-            .push(new_peer.clone());
-
-        directory.remove_peer(&myself, mod_date);
-
-        assert!(directory.signature.last_modified == mod_date);
-        assert!(directory.signature.shared_peers.contains(&new_peer));
-        assert!(directory
-            .shared_files
-            .get(&Uuid::nil())
-            .unwrap()
-            .owned_peers
-            .contains(&new_peer));
-        assert_eq!(directory.shared_files.len(), 1);
-    }
-
-    #[test]
-    fn remove_peer_only_shared_peers_should_change() {
-        let mut directory = setup();
-        let mod_date = Utc::now();
-        let myself = PeerId {
-            hostname: HOSTNAME.to_string(),
-            uuid: PEER_UUID,
-        };
-        let new_peer = PeerId {
-            hostname: "test 2".to_owned(),
-            uuid: Uuid::from_bytes([1; 16]),
-        };
-        directory.signature.shared_peers.push(new_peer.clone());
-
-        directory.remove_peer(&new_peer, mod_date);
-
-        assert!(directory.signature.last_modified == mod_date);
-        assert!(directory.signature.shared_peers.contains(&myself));
-        assert_eq!(directory.signature.shared_peers.len(), 1);
-        assert_eq!(directory.shared_files.len(), 1);
-        assert_eq!(
-            directory
+            assert!(directory.signature.last_modified == mod_date);
+            assert!(directory
                 .shared_files
                 .get(&Uuid::nil())
                 .unwrap()
                 .owned_peers
-                .get(0)
-                .unwrap(),
-            &myself
-        );
+                .contains(&new_peer));
+
+            let file = directory.shared_files.get(&Uuid::nil()).unwrap();
+
+            match &file.content_location {
+                ContentLocation::NetworkOnly => assert!(false),
+                ContentLocation::LocalPath(path) => assert_eq!(path, &expected_path_buf),
+            }
+        }
+
+        #[test]
+        fn add_files_should_contain_new_file() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let file_id = Uuid::from_bytes([1; 16]);
+            let files = vec![SharedFile {
+                name: "file 1".to_string(),
+                identifier: file_id,
+                content_hash: 1,
+                last_modified: mod_date,
+                content_location: crate::data::ContentLocation::NetworkOnly,
+                owned_peers: vec![myself],
+                size: 1,
+            }];
+
+            let result = directory.add_files(files, mod_date);
+
+            assert!(directory.signature.last_modified == mod_date);
+            assert_eq!(directory.shared_files.len(), 2);
+            assert_eq!(directory.shared_files.get(&file_id).unwrap().name, "file 1");
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn add_files_should_return_error_when_identifier_already_exists() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let file_id = Uuid::nil();
+            let files = vec![SharedFile {
+                name: "file 1".to_string(),
+                identifier: file_id,
+                content_hash: 1,
+                last_modified: mod_date,
+                content_location: crate::data::ContentLocation::NetworkOnly,
+                owned_peers: vec![myself],
+                size: 1,
+            }];
+
+            let result = directory.add_files(files, mod_date);
+
+            assert!(directory.signature.last_modified != mod_date);
+            assert_eq!(directory.shared_files.len(), 1);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn add_files_should_return_error_when_file_with_same_content_hash_exists() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let file_id = Uuid::from_bytes([1; 16]);
+            let files = vec![SharedFile {
+                name: "file 2".to_string(),
+                identifier: file_id,
+                content_hash: 0,
+                last_modified: mod_date,
+                content_location: crate::data::ContentLocation::NetworkOnly,
+                owned_peers: vec![myself],
+                size: 1,
+            }];
+
+            let result = directory.add_files(files, mod_date);
+
+            assert!(directory.signature.last_modified != mod_date);
+            assert_eq!(directory.shared_files.len(), 1);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn remove_files_no_files_should_remain() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let file_id = Uuid::nil();
+
+            directory.remove_files(&myself, mod_date, vec![file_id]);
+
+            assert!(directory.signature.last_modified == mod_date);
+            assert_eq!(directory.shared_files.len(), 0);
+        }
+
+        #[test]
+        fn remove_files_file_should_remain_with_fewer_owners() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let file_id = Uuid::nil();
+            let new_peer = PeerId {
+                hostname: "test 2".to_string(),
+                uuid: Uuid::from_bytes([1; 16]),
+            };
+            directory
+                .shared_files
+                .get_mut(&Uuid::nil())
+                .unwrap()
+                .owned_peers
+                .push(new_peer.clone());
+
+            directory.remove_files(&myself, mod_date, vec![file_id]);
+
+            assert!(directory.signature.last_modified == mod_date);
+            assert_eq!(directory.shared_files.len(), 1);
+            assert_eq!(
+                directory
+                    .shared_files
+                    .get(&file_id)
+                    .unwrap()
+                    .owned_peers
+                    .get(0)
+                    .unwrap(),
+                &new_peer
+            );
+        }
+
+        #[test]
+        fn remove_peer_no_files_should_remain() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+
+            directory.remove_peer(&myself, mod_date);
+
+            assert!(directory.signature.last_modified == mod_date);
+            assert_eq!(directory.shared_files.len(), 0);
+        }
+
+        #[test]
+        fn remove_peer_single_file_should_remain() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let new_peer = PeerId {
+                hostname: "test 2".to_owned(),
+                uuid: Uuid::from_bytes([1; 16]),
+            };
+            directory.signature.shared_peers.push(new_peer.clone());
+            directory
+                .shared_files
+                .get_mut(&Uuid::nil())
+                .unwrap()
+                .owned_peers
+                .push(new_peer.clone());
+
+            directory.remove_peer(&myself, mod_date);
+
+            assert!(directory.signature.last_modified == mod_date);
+            assert!(directory.signature.shared_peers.contains(&new_peer));
+            assert!(directory
+                .shared_files
+                .get(&Uuid::nil())
+                .unwrap()
+                .owned_peers
+                .contains(&new_peer));
+            assert_eq!(directory.shared_files.len(), 1);
+        }
+
+        #[test]
+        fn remove_peer_only_shared_peers_should_change() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let new_peer = PeerId {
+                hostname: "test 2".to_owned(),
+                uuid: Uuid::from_bytes([1; 16]),
+            };
+            directory.signature.shared_peers.push(new_peer.clone());
+
+            directory.remove_peer(&new_peer, mod_date);
+
+            assert!(directory.signature.last_modified == mod_date);
+            assert!(directory.signature.shared_peers.contains(&myself));
+            assert_eq!(directory.signature.shared_peers.len(), 1);
+            assert_eq!(directory.shared_files.len(), 1);
+            assert_eq!(
+                directory
+                    .shared_files
+                    .get(&Uuid::nil())
+                    .unwrap()
+                    .owned_peers
+                    .get(0)
+                    .unwrap(),
+                &myself
+            );
+        }
+
+        #[test]
+        fn add_peers_contains_new_peers() {
+            let mut directory = setup();
+            let mod_date = Utc::now();
+            let myself = PeerId {
+                hostname: HOSTNAME.to_string(),
+                uuid: PEER_UUID,
+            };
+            let new_peer = PeerId {
+                hostname: "test 2".to_owned(),
+                uuid: Uuid::from_bytes([1; 16]),
+            };
+
+            directory.add_peers(vec![new_peer.clone()], mod_date);
+
+            assert_eq!(directory.signature.last_modified, mod_date);
+            assert!(directory.signature.shared_peers.contains(&new_peer));
+            assert!(directory.signature.shared_peers.contains(&myself));
+        }
     }
 }

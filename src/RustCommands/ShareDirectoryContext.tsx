@@ -115,6 +115,8 @@ function ShareDirectoryProvider({ children }: any) {
           Object.keys(input.shared_files).forEach((key) => {
             if (validateUuid(key)) {
               fileMap.set(key, input.shared_files[key] as SharedFile);
+
+              console.debug("setting file " + JSON.stringify(input.shared_files[key]));
             }
           });
 
