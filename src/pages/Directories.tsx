@@ -312,6 +312,7 @@ function Directories() {
           secondaryAction={
             <IconButton
               edge="end"
+              id={"expand" + val.signature.name}
               onClick={(event) =>
                 handleDirectoryOptionsOpen(event, val.signature.identifier)
               }
@@ -324,7 +325,7 @@ function Directories() {
             style={{ maxHeight: "3em" }}
             onClick={() => handleListClick(val.signature.identifier)}
           >
-            <ListItemText>
+            <ListItemText id={val.signature.name}>
               {val.signature.name}
               {usedCount && (
                 <Typography
@@ -355,6 +356,7 @@ function Directories() {
           onClose={handleDirectoryOptionsClose}
         >
           <MenuItem
+            id="directory-leave-btn"
             onClick={() => handleLeaveOpen(optDirectory?.signature?.identifier)}
           >
             Leave
@@ -403,8 +405,8 @@ function Directories() {
             />
           </DialogContent>
           <DialogActions>
-            <Button onClick={handleCloseCreate}>Cancel</Button>
-            <Button onClick={handleCreate}>Create</Button>
+            <Button id="cancel-create" onClick={handleCloseCreate}>Cancel</Button>
+            <Button id="create-btn" onClick={handleCreate}>Create</Button>
           </DialogActions>
         </div>
       </Dialog>
@@ -436,7 +438,7 @@ function Directories() {
           </DialogContent>
           <DialogActions>
             <Button onClick={handleLeaveClose}>Cancel</Button>
-            <Button onClick={handleLeave}>Leave</Button>
+            <Button id="leave-btn" onClick={handleLeave}>Leave</Button>
           </DialogActions>
         </div>
       </Dialog>

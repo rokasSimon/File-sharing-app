@@ -1,7 +1,7 @@
 const os = require("os");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
-const { Builder, By, Capabilities } = require("selenium-webdriver");
+const { Builder, By, until, Capabilities } = require("selenium-webdriver");
 const { expect } = require("chai");
 
 // create the path to the expected application binary
@@ -11,7 +11,7 @@ const application = path.resolve(
   "src-tauri",
   "target",
   "release",
-  "file-sharing-app"
+  "file-sharing-app.exe"
 );
 
 // keep track of the webdriver instance we create
@@ -46,13 +46,37 @@ before(async function () {
     .build();
 });
 
-describe("Hello Tauri", () => {
-  it("should be cordial", async () => {
-    const text = await driver
-      .findElement(By.css("body"))
-      .getText();
+describe("Start share directory", function() {
+  this.timeout(10000);
+  
+  it("should create a new directory named '---Test---'", async function() {
+    
+    await driver.findElement(By.id("start-share-directory-btn")).click();
 
-    expect(text).to.be.true();
+    let input = await driver.findElement(By.id("share-directory-name"));
+    await input.click();
+    await input.sendKeys("---Test---");
+
+    let btn = await driver.wait(until.elementLocated(By.id("create-btn")), 10000);
+    await btn.click();
+
+    let directoryText = await driver.wait(until.elementLocated(By.id("---Test---")), 10000).getText();
+
+    expect(directoryText).to.include("---Test---");
+  });
+
+  it("should leave a directory named '---Test---'", async function() {
+    
+    await driver.findElement(By.id("---Test---"));
+    await driver.findElement(By.id("expand---Test---")).click();
+    await driver.findElement(By.id("directory-leave-btn")).click();
+    await driver.findElement(By.id("leave-btn")).click();
+
+    await driver.sleep(3000);
+
+    let items = await driver.findElements(By.id("---Test---"));
+
+    expect(items.length).to.be.lessThan(1);
   });
 });
 

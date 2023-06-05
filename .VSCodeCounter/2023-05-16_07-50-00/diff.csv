@@ -1,0 +1,11 @@
+"filename", "language", "JavaScript", "JSON", "Rust", "TypeScript JSX", "TypeScript", "comment", "blank", "total"
+"e:\DEV\Rust\file-sharing-app\package-lock.json", "JSON", 0, 883, 0, 0, 0, 0, 0, 883
+"e:\DEV\Rust\file-sharing-app\package.json", "JSON", 0, 3, 0, 0, 0, 0, 0, 3
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\client.rs", "Rust", 0, 0, 1, 0, 0, 0, 1, 2
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\data.rs", "Rust", 0, 0, 80, 0, 0, 0, 20, 100
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\server.rs", "Rust", 0, 0, -92, 0, 0, 0, -20, -112
+"e:\DEV\Rust\file-sharing-app\src\App.test.tsx", "TypeScript JSX", 0, 0, 0, -8, 0, 0, -2, -10
+"e:\DEV\Rust\file-sharing-app\src\RustCommands\ShareDirectoryContext.tsx", "TypeScript JSX", 0, 0, 0, 1, 0, 0, 1, 2
+"e:\DEV\Rust\file-sharing-app\src\setupTests.ts", "TypeScript", 0, 0, 0, 0, -1, -4, -1, -6
+"e:\DEV\Rust\file-sharing-app\test\test.js", "JavaScript", 43, 0, 0, 0, 0, 10, 13, 66
+"Total", "-", 43, 886, -11, -7, -1, 6, 12, 928

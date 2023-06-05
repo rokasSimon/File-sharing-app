@@ -75,6 +75,17 @@ function App() {
   React.useEffect(() => {
     if (loaded.current) return;
 
+    let fontSize = 12;
+    const root = document.documentElement;
+    window.addEventListener('wheel', (e) => {
+      if (e.ctrlKey) {
+        const pixelChange = e.deltaY < 0 ? 4 : -4;
+        fontSize += pixelChange;
+
+        root.style.fontSize = fontSize + "px";
+      }
+    });
+
     const startListenErrors = async () => {
       const _ = await listen<BackendError>("Error", async (event) => {
         const input = event.payload;
