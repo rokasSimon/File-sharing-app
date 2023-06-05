@@ -84,7 +84,7 @@ jobs:
         id: publish-release
         uses: actions/github-script@v6
         env:
-          release_id: ${{ needs.create-release.outputs.release_id }}
+          release_id: "Release 1.0"
         with:
           script: |
             github.rest.repos.updateRelease({
