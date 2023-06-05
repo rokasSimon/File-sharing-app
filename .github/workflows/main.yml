@@ -10,7 +10,7 @@ jobs:
       contents: write
     runs-on: ubuntu-20.04
     outputs:
-      release_id: "Release 1.0a"
+      release_id: ${{ steps.create-release.outputs.result }}
 
     steps:
       - uses: actions/checkout@v3
@@ -28,8 +28,8 @@ jobs:
             const { data } = await github.rest.repos.createRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              tag_name: `app-v1.0a`,
-              name: `Release 1.0a`,
+              tag_name: `app-v${process.env.PACKAGE_VERSION}`,
+              name: `Desktop App v${process.env.PACKAGE_VERSION}`,
               body: 'Take a look at the assets to download and install this app.',
               draft: true,
               prerelease: false
@@ -71,7 +71,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CI: false
         with:
-          releaseId: "Release 1.0a"
+          releaseId: ${{ needs.create-release.outputs.release_id }}
 
   publish-release:
     permissions:
@@ -84,7 +84,7 @@ jobs:
         id: publish-release
         uses: actions/github-script@v6
         env:
-          release_id: "Release 1.0a"
+          release_id: ${{ needs.create-release.outputs.release_id }}
         with:
           script: |
             github.rest.repos.updateRelease({

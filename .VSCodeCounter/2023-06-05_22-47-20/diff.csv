@@ -1,0 +1,6 @@
+"filename", "language", "JavaScript", "Rust", "TypeScript JSX", "comment", "blank", "total"
+"e:\DEV\Rust\file-sharing-app\src-tauri\src\data.rs", "Rust", 0, -1, 0, 1, 0, 0
+"e:\DEV\Rust\file-sharing-app\src\App.tsx", "TypeScript JSX", 0, 0, 9, 0, 2, 11
+"e:\DEV\Rust\file-sharing-app\src\pages\Directories.tsx", "TypeScript JSX", 0, 0, 2, 0, 0, 2
+"e:\DEV\Rust\file-sharing-app\test\test.js", "JavaScript", 14, 0, 0, 0, 10, 24
+"Total", "-", 14, -1, 11, 1, 12, 37
